@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "yunxiao-work-assistant",
-      "description": "只读基于云效 MCP 和 Git 提交生成个人工作计划、周报和进展总结",
+      "description": "基于云效 MCP 的 DevOps 助手包，覆盖组织、代码、项目、流水线、制品、应用交付、测试管理，并保留个人计划和周报助手",
       "version": "0.1.0",
       "source": "./",
       "author": {

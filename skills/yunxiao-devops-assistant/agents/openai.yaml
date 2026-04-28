@@ -1,0 +1,4 @@
+interface:
+  display_name: "云效 DevOps 助手"
+  short_description: "围绕云效 MCP 执行研发协作、代码、流水线和交付任务"
+  default_prompt: "使用 $yunxiao-devops-assistant 帮我检查云效项目、流水线和部署风险；需要写操作时先给出确认清单。"

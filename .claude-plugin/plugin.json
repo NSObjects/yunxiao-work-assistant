@@ -1,6 +1,6 @@
 {
   "name": "yunxiao-work-assistant",
-  "description": "只读基于云效 MCP 和 Git 提交生成个人工作计划、周报和进展总结",
+  "description": "基于云效 MCP 的 DevOps 助手包，覆盖组织、代码、项目、流水线、制品、应用交付、测试管理，并保留个人计划和周报助手",
   "version": "0.1.0",
   "author": {
     "name": "Yunxiao Work Assistant Maintainers"
@@ -9,6 +9,12 @@
   "keywords": [
     "yunxiao",
     "mcp",
+    "devops",
+    "project-management",
+    "code-management",
+    "pipeline",
+    "deployment",
+    "test-management",
     "work-plan",
     "weekly-report",
     "git"
@@ -19,9 +25,15 @@
   "userConfig": {
     "yunxiao_access_token": {
       "type": "string",
-      "title": "Yunxiao access token",
+      "title": "云效访问令牌",
       "description": "用于访问云效 MCP 的个人访问令牌",
       "sensitive": true
+    },
+    "yunxiao_api_base_url": {
+      "type": "string",
+      "title": "云效 API 基础地址",
+      "description": "中心站使用 https://openapi-rdc.aliyuncs.com；Region 站填写组织专属域名，例如 https://your-org.devops.aliyuncs.com",
+      "default": "https://openapi-rdc.aliyuncs.com"
     }
   }
 }

@@ -1,5 +1,5 @@
 {
-  "description": "阻止云效 MCP 写操作，只允许读取数据生成计划和周报",
+  "description": "可选云效 MCP 只读保护；设置 YUNXIAO_READ_ONLY_GUARD=1 时阻止写操作",
   "hooks": {
     "PreToolUse": [
       {

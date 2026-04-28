@@ -1,0 +1,10 @@
+interface:
+  display_name: "云效工作助手"
+  short_description: "从云效生成周计划、周报，并可确认后写回预计工时"
+  default_prompt: "使用 $yunxiao-work-assistant 帮我读取云效待办，安排本周工作；需要写回预计工时和计划开始时间时先给我确认清单。"
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "yunxiao"
+      description: "云效 MCP，用于查询项目、工作项、字段、预计工时和评论，并在确认后写回周计划"
