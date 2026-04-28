@@ -1,0 +1,27 @@
+{
+  "name": "yunxiao-work-assistant",
+  "description": "只读基于云效 MCP 和 Git 提交生成个人工作计划、周报和进展总结",
+  "version": "0.1.0",
+  "author": {
+    "name": "Yunxiao Work Assistant Maintainers"
+  },
+  "license": "MIT",
+  "keywords": [
+    "yunxiao",
+    "mcp",
+    "work-plan",
+    "weekly-report",
+    "git"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json",
+  "userConfig": {
+    "yunxiao_access_token": {
+      "type": "string",
+      "title": "Yunxiao access token",
+      "description": "用于访问云效 MCP 的个人访问令牌",
+      "sensitive": true
+    }
+  }
+}

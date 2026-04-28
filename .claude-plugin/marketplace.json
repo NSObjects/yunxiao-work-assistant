@@ -1,0 +1,20 @@
+{
+  "name": "yunxiao-work-assistant-local",
+  "metadata": {
+    "description": "云效工作助手 Claude Code 插件的本地分发源"
+  },
+  "owner": {
+    "name": "Yunxiao Work Assistant Maintainers"
+  },
+  "plugins": [
+    {
+      "name": "yunxiao-work-assistant",
+      "description": "只读基于云效 MCP 和 Git 提交生成个人工作计划、周报和进展总结",
+      "version": "0.1.0",
+      "source": "./",
+      "author": {
+        "name": "Yunxiao Work Assistant Maintainers"
+      }
+    }
+  ]
+}

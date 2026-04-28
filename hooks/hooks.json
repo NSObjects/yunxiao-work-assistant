@@ -1,0 +1,16 @@
+{
+  "description": "阻止云效 MCP 写操作，只允许读取数据生成计划和周报",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/block_yunxiao_writes.py"
+          }
+        ]
+      }
+    ]
+  }
+}
