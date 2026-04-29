@@ -1,176 +1,205 @@
 # 云效工作助手插件
 
-`yunxiao-work-assistant` 是一个面向 Claude Code 和 Codex 的云效 DevOps 插件。它通过 `alibabacloud-devops-mcp-server` 连接阿里云云效，提供组织、代码、项目、流水线、制品、应用交付、测试管理查询和受控变更能力，并保留个人工作计划与周报生成能力。
+`yunxiao-work-assistant-plugin` 是面向 Claude Code 与 Codex 的云效 MCP 插件，内置两套技能：
 
-## 功能
+- `yunxiao-devops-assistant`：覆盖组织、代码、项目/工作项、流水线、制品、应用交付、测试管理。
+- `yunxiao-work-assistant`：聚焦个人周计划、计划写回、需求分支管理、周报生成。
 
-- `yunxiao-devops-assistant`：面向云效 DevOps 日常操作，覆盖组织管理、代码管理、项目/工作项、流水线、制品仓库、应用交付和测试管理。
-- `yunxiao-work-assistant`：面向个人工作流，支持查询本人工作项、按当前迭代和延期旧迭代生成本周工作计划、按确认清单写回计划开始时间、计划完成时间和预计工时、为需求关联已有分支或新建开发分支、结合云效代码提交生成周报。
-- 内置 Yunxiao MCP 配置：通过 `npx -y alibabacloud-devops-mcp-server` 启动云效 MCP 服务。
-- 可选只读保护：设置 `YUNXIAO_READ_ONLY_GUARD=1` 后，hook 会阻止云效写工具调用。
+插件通过 `npx -y alibabacloud-devops-mcp-server` 连接云效，并遵循“先查询、再判断、后变更”的执行模式。
 
-## 前置条件
+## 技能总览
 
-- Node.js `>= 20.0.0`
-- 可访问云效 OpenAPI 的个人访问令牌
-- Claude Code 或 Codex 插件环境
-- 如需生成周报中的代码提交活动，需要访问云效代码管理并具备目标仓库只读权限。
+### `yunxiao-devops-assistant`
 
-云效访问令牌需要按实际使用范围授予权限。只查询工作项时使用项目协作读权限即可；涉及流水线、代码、应用交付、测试管理或写操作时，需要补齐对应模块权限。
+定位：通用云效 DevOps 助手，用于查询、诊断、变更规划与受控写操作。
+
+能力范围：
+
+- 组织管理：组织、角色、部门、成员查询。
+- 代码管理：仓库、分支、提交、MR、文件树与评论。
+- 项目协作：项目、迭代、版本、工作项、字段、评论、工时。
+- 流水线：运行记录、任务日志、YAML 更新、资源成员与标签。
+- 应用交付：部署单、变更请求、编排、变量组、发布阶段。
+- 测试管理：测试目录、用例、测试计划、结果更新。
+
+执行约束：
+
+- 高风险动作（删除、终止、跳过、重试、发布、部署、权限移交等）必须先输出确认清单。
+- 不臆造组织/项目/仓库/流水线/应用等对象 ID。
+- 写操作后必须回查验证结果。
+
+### `yunxiao-work-assistant`
+
+定位：个人工作流助手，目标固定为四类任务：
+
+- 规划工作
+- 写回周计划
+- 需求分支管理
+- 写周报
+
+关键规则：
+
+- 默认按 `assignedTo: "self"` 查询。
+- 工作计划默认覆盖“当前迭代 + 延期旧迭代未完成事项”。
+- 未经用户明确确认，不执行计划写回或分支创建。
+- 周报代码证据只来自云效 Codeup（`list_commits` / `get_commit`），不读取本地 Git 历史。
+- 当前 MCP 不支持直接写入工作项“关联代码分支”原生区域时，改为写工作项评论记录关联。
+
+## 与旧版相比的重点变化
+
+- 技能结构已从“单段说明”升级为“SKILL + references + agents”三层结构。
+- `yunxiao-work-assistant` 强化了计划边界：当前迭代、延期旧迭代、`TODOLIST` 区分处理。
+- 写回规则收敛为：仅 `预计工时 + 计划开始时间 + 计划完成时间`，并要求字段 ID 先识别再写回。
+- 周报规则收敛为：工作项双查询去重 + 云效代码提交证据 + 未关联提交单列。
+- 分支管理新增明确边界：`create_branch` 只建分支，关联信息默认落评论。
 
 ## 安装
 
 ### Claude Code
 
-如果插件已经发布到 Claude Code marketplace，可以在 Claude Code 中执行：
+从 marketplace 安装（已发布时）：
 
 ```text
 /plugin marketplace add <marketplace>
 /plugin install yunxiao-work-assistant@<marketplace-name>
 ```
 
-本地开发或调试时，可以直接加载当前插件目录：
+本地调试：
 
 ```bash
-claude --plugin-dir /Users/lintao/workspace/tools/yunxiao/yunxiao-work-assistant-plugin
+claude --plugin-dir <plugin-dir>
 ```
 
-当前本地 marketplace 元信息位于 `.claude-plugin/marketplace.json`，插件清单位于 `.claude-plugin/plugin.json`。
+相关清单文件：
+
+- `.claude-plugin/plugin.json`
+- `.claude-plugin/marketplace.json`
 
 ### Codex
 
-Codex 插件入口位于 `.codex-plugin/plugin.json`，可从当前插件目录作为本地插件加载：
+本地安装：
 
 ```text
-/plugin install /Users/lintao/workspace/tools/yunxiao/yunxiao-work-assistant-plugin
+/plugin install <plugin-dir>
 ```
 
-Codex manifest 使用插件目录名 `yunxiao-work-assistant-plugin` 作为插件名，符合 Codex 对“目录名与 `plugin.json` 的 `name` 一致”的要求。
+注意：
 
-Codex 使用 `.codex.mcp.json` 启动云效 MCP，默认从进程环境继承云效配置。启动 Codex 前设置：
+- Codex 清单位于 `.codex-plugin/plugin.json`。
+- 本地目录名需与 `.codex-plugin/plugin.json` 的 `name` 一致（当前为 `yunxiao-work-assistant-plugin`）。
+- Codex 通过 `.codex.mcp.json` 启动 Yunxiao MCP，默认从进程环境读取云效配置。
+- 启动 Codex 前建议先设置 `YUNXIAO_ACCESS_TOKEN` 与 `YUNXIAO_API_BASE_URL`。
+
+## 配置
+
+### 必需环境
+
+- Node.js `>= 20.0.0`
+- 云效个人访问令牌（按实际任务授予权限）
+
+### 推荐环境变量
 
 ```bash
 export YUNXIAO_ACCESS_TOKEN="<your-token>"
 export YUNXIAO_API_BASE_URL="https://openapi-rdc.aliyuncs.com"
 ```
 
-如果使用 Region 站，把 `YUNXIAO_API_BASE_URL` 改为组织专属域名。
-
-## 配置
-
-Claude Code 安装后配置插件参数：
-
-| 配置项 | 说明 | 默认值 |
-|---|---|---|
-| `yunxiao_access_token` | 云效个人访问令牌，敏感字段 | 无 |
-| `yunxiao_api_base_url` | 云效 API 基础地址 | `https://openapi-rdc.aliyuncs.com` |
-
-中心站通常使用默认地址。Region 站需要填写组织专属域名，例如：
+Region 站请使用组织专属域名，例如：
 
 ```text
 https://your-org.devops.aliyuncs.com
 ```
 
-Claude Code 内置 MCP 配置等价于：
+### Claude 用户配置项
 
-```json
-{
-  "yunxiao": {
-    "type": "stdio",
-    "command": "npx",
-    "args": ["-y", "alibabacloud-devops-mcp-server"],
-    "env": {
-      "YUNXIAO_ACCESS_TOKEN": "${user_config.yunxiao_access_token}",
-      "YUNXIAO_API_BASE_URL": "${user_config.yunxiao_api_base_url}"
-    }
-  }
-}
-```
+| 配置项 | 说明 | 默认值 |
+|---|---|---|
+| `yunxiao_access_token` | 云效个人访问令牌（敏感） | 无 |
+| `yunxiao_api_base_url` | 云效 API 基础地址 | `https://openapi-rdc.aliyuncs.com` |
 
-## 使用示例
+## 技能使用建议
 
-查询云效上下文：
+### 触发 `yunxiao-devops-assistant`
+
+适用于：流水线失败诊断、部署问题排查、MR/仓库治理、云效模块化查询与受控变更。
+
+示例：
 
 ```text
-查看我当前云效组织下参与的项目。
+使用 $yunxiao-devops-assistant 帮我检查云效项目、流水线和部署风险；需要写操作时先给出确认清单。
 ```
 
-生成本周计划：
+### 触发 `yunxiao-work-assistant`
+
+适用于：个人周计划、计划写回、需求分支协作、周报汇总。
+
+示例：
 
 ```text
-根据云效里分配给我的需求、任务和缺陷，生成本周工作计划。
-```
-
-写回周计划：
-
-```text
-把刚才确认的本周计划写回云效预计工时、计划开始时间和计划完成时间。
-```
-
-插件会先输出写回清单，只有在用户明确回复“确认写回”后才执行写操作。
-
-生成周报：
-
-```text
-结合云效工作项和云效代码提交，生成本周周报。
-```
-
-需求分支管理：
-
-```text
-给需求 ABC-123 在仓库 frontend 基于 main 新建 feature/ABC-123-login 分支，并关联到需求。
-```
-
-插件会先确认需求、仓库、来源分支和目标分支名，再等待“确认创建分支”后执行。当前 Yunxiao MCP 没有直接写入工作项“关联代码分支”区域的专用工具，插件会在工作项评论里记录仓库、分支和链接，避免臆造不存在的工具调用。
-
-诊断流水线或部署问题：
-
-```text
-帮我查看某条流水线最近一次失败原因，并给出处理建议。
+使用 $yunxiao-work-assistant 帮我读取云效待办，安排本周工作；需要写回计划日期、预计工时或创建需求分支时先给我确认清单。
 ```
 
 ## 写操作安全策略
 
-插件默认遵循“先查询、再判断、后变更”的流程。对创建、更新、删除、运行、终止、跳过、重试、发布、部署、权限移交、变量修改等动作，会先说明工具名、目标对象、提交字段、影响范围、验证方式和回滚方式。
+- 默认只读查询；写操作需要用户明确确认。
+- 写前应展示：工具、目标对象、提交字段、影响范围、验证方式、回滚方式。
+- 写后应执行回查，输出成功项、失败项与未写项。
 
-如需强制只读，可在启动 Claude Code 前设置：
+如需强制只读（Claude Code）：
 
 ```bash
 export YUNXIAO_READ_ONLY_GUARD=1
 ```
 
-启用后，`hooks/block_yunxiao_writes.py` 会拒绝匹配到的云效写工具调用，只允许读取云效数据。
+启用后，`hooks/block_yunxiao_writes.py` 会拦截匹配到的云效写工具调用。
 
-当前只读保护 hook 使用 Claude Code 的 `${CLAUDE_PLUGIN_ROOT}` 变量，Codex manifest 暂不挂载该 hook，避免在 Codex 下引用不存在的运行时变量。
+## 更新机制
+
+- 本插件不提供独立“更新工具”。
+- 技能更新时，直接让 AI 拉取或同步插件内 `skills/` 目录即可。
+- `.claude-plugin/plugin.json` 与 `.codex-plugin/plugin.json` 都配置了 `"skills": "./skills/"`，会自动加载该目录。
 
 ## 目录结构
 
 ```text
 .
-├── .codex-plugin/
-│   └── plugin.json
 ├── .claude-plugin/
 │   ├── marketplace.json
 │   └── plugin.json
-├── .codex.mcp.json
+├── .codex-plugin/
+│   └── plugin.json
 ├── .mcp.json
+├── .codex.mcp.json
 ├── hooks/
 │   ├── block_yunxiao_writes.py
 │   └── hooks.json
 ├── skills/
 │   ├── yunxiao-devops-assistant/
+│   │   ├── agents/
+│   │   │   └── openai.yaml
+│   │   ├── references/
+│   │   │   ├── setup.md
+│   │   │   ├── tool-catalog.md
+│   │   │   └── workflows.md
+│   │   └── SKILL.md
 │   └── yunxiao-work-assistant/
+│       ├── agents/
+│       │   └── openai.yaml
+│       ├── references/
+│       │   ├── output-formats.md
+│       │   └── yunxiao-mcp.md
+│       └── SKILL.md
 └── LICENSE
 ```
 
 ## 排障
 
-1. 确认 Node.js 版本：`node -v`，需要 `>= 20.0.0`。
-2. 确认插件已加载，并且 Yunxiao MCP 服务出现在 Claude Code 或 Codex 的 MCP 列表中。
-3. 确认 `yunxiao_access_token` 有目标模块权限。
-4. Region 站报错时，优先检查 `yunxiao_api_base_url` 是否为组织实例域名。
-5. 工具不存在时，检查云效 MCP 是否启用了对应 toolset。
-6. 写操作被拒绝时，检查是否设置了 `YUNXIAO_READ_ONLY_GUARD=1`。
+1. 检查 Node.js：`node -v`，需 `>= 20.0.0`。
+2. 检查插件是否加载，且 Yunxiao MCP 是否出现在工具列表。
+3. 检查 `YUNXIAO_ACCESS_TOKEN` 权限是否覆盖目标模块。
+4. Region 站错误优先核对 `YUNXIAO_API_BASE_URL`。
+5. 工具缺失时检查是否限制了 `toolsets`。
+6. 写操作被拒绝时检查 `YUNXIAO_READ_ONLY_GUARD=1` 是否开启。
 
 ## 许可
 
