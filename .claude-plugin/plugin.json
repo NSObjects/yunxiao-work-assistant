@@ -1,6 +1,6 @@
 {
   "name": "yunxiao-work-assistant",
-  "description": "基于云效 MCP 的 DevOps 助手包，覆盖组织、代码、项目、流水线、制品、应用交付、测试管理，并保留个人计划和周报助手",
+  "description": "基于云效 MCP 的 DevOps 助手包，覆盖组织、代码、项目、流水线、制品、应用交付、测试管理，并保留个人计划、需求分支管理和周报助手",
   "version": "0.1.0",
   "author": {
     "name": "Yunxiao Work Assistant Maintainers"

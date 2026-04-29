@@ -22,9 +22,17 @@
 - 查仓库：先用 `list_repositories` 定位仓库，再用 `get_repository` 补详情。
 - 查分支：用 `list_branches`、`get_branch` 确认源分支和目标分支。
 - 查代码：用 `list_files` 查看目录，用 `get_file_blobs` 读取具体文件；不要在没读当前内容前调用 `update_file`。
-- 查提交：用 `list_commits`、`get_commit` 追溯变更，必要时和本地 Git 历史交叉验证。
+- 查提交：用 `list_commits`、`get_commit` 追溯变更，必要时结合合并请求、流水线或部署记录交叉验证。
 - 合并请求：创建前用 `get_compare` 确认 diff，用 `list_change_request` 排除重复 MR；创建后用 `get_change_request` 和评论列表验证。
 - 文件写入：`create_file`、`update_file`、`delete_file` 都要确认分支、路径、提交信息、旧内容或删除原因。
+
+## 需求与分支
+
+- 需求、任务、缺陷都按工作项处理；先用 `get_work_item` 确认工作项，再用 `get_repository`、`get_branch` 或 `list_branches` 确认仓库和分支。
+- 新建需求分支前，确认来源 `ref` 存在、目标分支不存在，并输出工作项、仓库、来源 `ref`、目标分支名、验证方式和回滚方式。
+- 用户确认后调用 `create_branch`；成功后调用 `get_branch` 验证分支存在。
+- 当前 Yunxiao MCP 未暴露直接写入工作项“关联代码分支”区域的专用工具，不要臆造工具名或把分支写入未知字段。需要记录关联时，用 `create_work_item_comment` 写清仓库、分支、分支链接和关联原因；后续创建合并请求时，可用 `create_change_request` 的 `workItemIds` 关联工作项。
+- 输出结果时区分“已创建分支”“已在工作项评论中记录关联”“是否进入云效原生关联区未知”。
 
 ## 流水线
 

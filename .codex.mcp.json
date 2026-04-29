@@ -1,0 +1,10 @@
+{
+  "yunxiao": {
+    "type": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "alibabacloud-devops-mcp-server"
+    ]
+  }
+}

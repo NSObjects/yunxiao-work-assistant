@@ -20,6 +20,8 @@
 
 ## 代码管理
 
+说明：`create_branch` 只创建 Codeup 分支，当前 MCP 入参没有工作项字段；`create_change_request` 支持通过 `workItemIds` 关联工作项。需求需要追溯分支时，先按 `references/workflows.md` 的“需求与分支”流程确认仓库和分支，再用可用工具记录关联。
+
 | 工具 | 用途 | 模式 |
 |---|---|---|
 | `create_branch` | 创建分支 | 写 |
