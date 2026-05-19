@@ -1,9 +1,10 @@
 # 云效工作助手插件
 
-`yunxiao-work-assistant-plugin` 是面向 Claude Code 与 Codex 的云效 MCP 插件，内置两套技能：
+`yunxiao-work-assistant-plugin` 是面向 Claude Code 与 Codex 的云效 MCP 插件，内置三套技能：
 
 - `yunxiao-devops-assistant`：覆盖组织、代码、项目/工作项、流水线、制品、应用交付、测试管理。
 - `yunxiao-work-assistant`：聚焦个人周计划、计划写回、需求分支管理、周报生成。
+- `yunxiao-mr-reviewer`：聚焦云效 Codeup MR 审核，读取项目指南和规格，写入格式统一的问题评论与最终总结评论。
 
 插件通过 `npx -y alibabacloud-devops-mcp-server` 连接云效，并遵循“先查询、再判断、后变更”的执行模式。
 
@@ -44,6 +45,17 @@
 - 未经用户明确确认，不执行计划写回或分支创建。
 - 周报代码证据只来自云效 Codeup（`list_commits` / `get_commit`），不读取本地 Git 历史。
 - 当前 MCP 不支持直接写入工作项“关联代码分支”原生区域时，改为写工作项评论记录关联。
+
+### `yunxiao-mr-reviewer`
+
+定位：云效 Codeup MR 审核助手，用于拉取 MR、patch set、diff、项目指南、规格和已有评论，输出可行动审核发现，并按固定 Markdown 模板写入云效评论。
+
+关键规则：
+
+- 审核前形成 Review Package，包含实现内容、规格/验收场景、目标基线、源分支头部、测试证据和缺失上下文。
+- 问题评论和最终总结评论分开写；问题评论聚焦单个可行动风险，最终总结沉淀结构化实现流程和人工 review 重点。
+- 评论不使用 Mermaid、HTML 或表格，避免云效评论区渲染不稳定。
+- MR 审核只读取已有测试证据，不运行本地测试、云效流水线或测试计划。
 
 ## 与旧版相比的重点变化
 
@@ -139,6 +151,16 @@ https://your-org.devops.aliyuncs.com
 使用 $yunxiao-work-assistant 帮我读取云效待办，安排本周工作；需要写回计划日期、预计工时或创建需求分支时先给我确认清单。
 ```
 
+### 触发 `yunxiao-mr-reviewer`
+
+适用于：云效 Codeup MR 审核、变更 diff 风险检查、按项目指南和 spec 核对实现、写入问题评论和最终总结评论。
+
+示例：
+
+```text
+使用 $yunxiao-mr-reviewer 帮我审核这个云效 Codeup MR，发现明确问题时按固定模板写入评论，最后发布结构化最终总结。
+```
+
 ## 写操作安全策略
 
 - 默认只读查询；写操作需要用户明确确认。
@@ -182,12 +204,18 @@ export YUNXIAO_READ_ONLY_GUARD=1
 │   │   │   ├── tool-catalog.md
 │   │   │   └── workflows.md
 │   │   └── SKILL.md
-│   └── yunxiao-work-assistant/
+│   ├── yunxiao-work-assistant/
+│   │   ├── agents/
+│   │   │   └── openai.yaml
+│   │   ├── references/
+│   │   │   ├── output-formats.md
+│   │   │   └── yunxiao-mcp.md
+│   │   └── SKILL.md
+│   └── yunxiao-mr-reviewer/
 │       ├── agents/
 │       │   └── openai.yaml
 │       ├── references/
-│       │   ├── output-formats.md
-│       │   └── yunxiao-mcp.md
+│       │   └── review-guidelines.md
 │       └── SKILL.md
 └── LICENSE
 ```
