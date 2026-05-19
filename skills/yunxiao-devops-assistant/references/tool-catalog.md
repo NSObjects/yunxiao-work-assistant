@@ -2,6 +2,8 @@
 
 按官方 README 的工具列表整理。`模式` 说明：`读` 表示查询；`生成` 表示只在本地生成内容；`写` 表示创建或更新；`高风险` 表示删除、终止、跳过、拒绝、发布、部署、权限移交或可能影响生产的动作。
 
+说明：本表保留官方 README 名称。不同 MCP 客户端或版本可能暴露别名；当前 Codex 环境常见映射包括 `get_current_organization_Info` -> `get_current_organization_info`、`list_change_request` -> `list_change_requests`、`get_compare` -> `compare`。调用工具时始终以当前会话实际可用工具为准。
+
 ## 组织管理
 
 | 工具 | 用途 | 模式 |
@@ -75,6 +77,10 @@
 | `get_work_item_workflow` | 获取工作项类型的工作流信息 | 读 |
 | `list_work_item_comments` | 列出特定工作项的评论 | 读 |
 | `create_work_item_comment` | 为特定工作项创建评论 | 写 |
+| `list_workitem_attachments` | 列出特定工作项附件 | 读 |
+| `get_workitem_file` | 获取工作项附件或描述内文件信息 | 读 |
+| `create_workitem_attachment` | 上传本地文件为工作项附件 | 写 |
+| `list_workitem_activities` | 列出工作项动态历史、字段变更、状态流转和关联变更 | 读 |
 | `list_current_user_effort_records` | 获取当前用户实际工时明细，时间跨度不能超过 6 个月 | 读 |
 | `list_effort_records` | 获取实际工时明细 | 读 |
 | `create_effort_record` | 登记实际工时 | 写 |

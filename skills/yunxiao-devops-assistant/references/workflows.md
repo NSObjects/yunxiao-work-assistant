@@ -2,7 +2,7 @@
 
 ## 通用上下文获取
 
-1. 如果用户没有提供组织，先用 `get_current_organization_Info` 或 `get_user_organizations` 确认 `organizationId`。
+1. 如果用户没有提供组织，先用当前可用的 `get_current_organization_info` / `get_current_organization_Info` 或 `get_user_organizations` 确认 `organizationId`。
 2. 如果任务涉及项目协作，先用 `search_projects` 找到 `spaceId`，再查工作项、迭代、版本、字段和工作流。
 3. 如果任务涉及代码，先用 `list_repositories` 或 `get_repository` 确认仓库 ID，再查分支、文件树、提交或合并请求。
 4. 如果任务涉及流水线，先用 `list_pipelines` 或 `smart_list_pipelines` 定位流水线，再查运行、任务和日志。
@@ -23,7 +23,7 @@
 - 查分支：用 `list_branches`、`get_branch` 确认源分支和目标分支。
 - 查代码：用 `list_files` 查看目录，用 `get_file_blobs` 读取具体文件；不要在没读当前内容前调用 `update_file`。
 - 查提交：用 `list_commits`、`get_commit` 追溯变更，必要时结合合并请求、流水线或部署记录交叉验证。
-- 合并请求：创建前用 `get_compare` 确认 diff，用 `list_change_request` 排除重复 MR；创建后用 `get_change_request` 和评论列表验证。
+- 合并请求：创建前用当前可用的 `compare` / `get_compare` 确认 diff，用 `list_change_requests` / `list_change_request` 排除重复 MR；创建后用 `get_change_request` 和评论列表验证。
 - 文件写入：`create_file`、`update_file`、`delete_file` 都要确认分支、路径、提交信息、旧内容或删除原因。
 
 ## 需求与分支

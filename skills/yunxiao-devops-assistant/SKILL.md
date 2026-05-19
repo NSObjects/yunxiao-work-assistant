@@ -8,7 +8,7 @@ description: 围绕阿里云云效 alibabacloud-devops-mcp-server 的组织管�
 ## 核心原则
 
 - 所有自然语言输出使用简体中文；代码、命令、配置键和云效工具名保持原文。
-- 以当前可用的 Yunxiao MCP 工具为准；`references/tool-catalog.md` 里的名称是 README 工具名后缀索引，不要臆造不存在的工具。
+- 以当前可用的 Yunxiao MCP 工具为准；`references/tool-catalog.md` 里的名称是官方 README 工具名，实际客户端可能有别名，不要臆造不存在的工具。
 - 默认先查询、再判断、后变更；没有明确对象 ID、目标状态、影响范围和回滚方式时，不执行写操作。
 - 不臆造 `organizationId`、`spaceId`、`repositoryId`、`pipelineId`、`applicationName`、环境 ID、用户 ID、状态 ID 或权限范围。
 - 不输出访问令牌、流水线密钥、变量组敏感值、部署日志中的密码或凭据；必要时脱敏。
@@ -24,7 +24,7 @@ description: 围绕阿里云云效 alibabacloud-devops-mcp-server 的组织管�
 
 1. 定位组织与空间：
    - 优先使用用户提供的 ID。
-   - 用户未提供时，用 `get_current_organization_Info`、`get_user_organizations`、`search_projects`、`list_repositories`、`list_pipelines`、`list_applications` 等只读工具发现上下文。
+   - 用户未提供时，用当前可用的 `get_current_organization_info` / `get_current_organization_Info`、`get_user_organizations`、`search_projects`、`list_repositories`、`list_pipelines`、`list_applications` 等只读工具发现上下文。
 2. 选择最小工具集：
    - 查询类任务只调用查询工具。
    - 写操作前先读取目标详情，确认当前状态与用户意图一致。

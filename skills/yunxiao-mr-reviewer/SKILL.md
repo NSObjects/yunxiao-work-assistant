@@ -1,0 +1,146 @@
+---
+name: yunxiao-mr-reviewer
+description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，拉取 MR 详情、patch set、diff、提交、文件内容、项目 AGENTS/AGENT 指南、spec 规格文件和已有评论，输出按严重程度排序的代码审核发现，并可主动在 MR 上发布行内问题评论和最终总结评论；用于用户要求审查云效 MR、Codeup 合并请求、变更 diff、待合并代码风险、规格实现一致性，或处理 MR 评论时。
+---
+
+# 云效 MR 审核助手
+
+## 核心原则
+
+- 所有自然语言输出使用简体中文；工具名、字段名、文件路径、代码片段保持原文。
+- 用户要求审核 MR 时，允许主动创建云效 MR 审核评论，不需要用户额外提示或二次确认；默认优先发布行内评论，无法可靠定位行号时发布全局评论。
+- 云效 MR 评论按通用 Markdown 编写，优先使用标题、列表、代码块和引用；不要使用 Mermaid、HTML 或依赖特定渲染组件的复杂格式。
+- 官方 README 的完整功能列表见 `https://raw.githubusercontent.com/aliyun/alibabacloud-devops-mcp-server/refs/heads/master/README.md`；MR 审核至少需要启用 `code-management`，按关联工作项核对需求时还需要 `project-management`。
+- 以当前会话真实暴露的 Yunxiao MCP 工具为准；旧文档可能使用 `list_change_request`、`get_compare` 等历史名称，当前优先使用 `list_change_requests`、`compare`。
+- 不臆造 `organizationId`、`repositoryId`、`localId`、分支名、patch set ID、文件路径或行号。缺关键参数时先查询，仍无法确认时再向用户要。
+- 审核发现必须基于 MR diff、目标/源分支文件内容、提交或已有评论证据；推断要标明依据，不把猜测写成事实。
+- 审核前必须形成紧凑 Review Package：实现内容、规格/验收场景、目标基线、源分支头部、测试证据、已知风险和缺失上下文；包内缺关键证据时结论用 `NEEDS_CONTEXT`。
+- MR 审核只读取已有测试证据，不运行本地测试命令、不触发云效流水线、不执行云效测试计划或测试用例；测试不足时只报告缺口和建议。
+- 审核输出以问题为主。没有明确 bug、回归、安全风险或缺失测试时，直接说明“未发现需要阻塞合并的问题”。
+- 行内/全局问题评论用于指出具体风险；最终总结评论用于沉淀整个分支的实现说明、流程图和人工 review 指引，二者不要混在一起。
+
+## 必要上下文
+
+- `organizationId`：优先使用用户给出的值；否则用历史上下文、环境变量 `YUNXIAO_ORGANIZATION_ID` / `YUNXIAO_ORG_ID`，或调用 `get_current_organization_info`。
+- `repositoryId`：优先使用用户给出的仓库 ID、URL 编码全路径或 MR 链接解析结果；否则用 `list_repositories` 按仓库名搜索并让用户在候选中确认。
+- `localId`：云效 Codeup 仓库内的 MR 局部 ID。用户只给标题或关键词时，用 `list_change_requests` 搜索 opened MR 并确认唯一结果。
+- MR 链接：从链接中提取仓库路径和 MR 编号时要保留原始链接；如果无法可靠解析，不要硬猜。
+
+## 审核流程
+
+1. 定位 MR：
+   - 调用 `get_current_organization_info` 获取默认组织。
+   - 调用 `get_repository` 或 `list_repositories` 确认仓库。
+   - 调用 `get_change_request` 获取 MR 标题、状态、作者、源分支、目标分支、关联工作项和描述。
+   - 如果只有搜索条件，调用 `list_change_requests`，优先筛选 `state="opened"`。
+2. 收集审核材料：
+   - 调用 `list_change_request_patch_sets` 获取版本列表，识别最新 patch set，以及行内评论需要的 `from_patchset_biz_id` / `to_patchset_biz_id`。
+   - 调用 `list_change_request_comments` 获取已发布和未解决评论，避免重复提出同一问题。
+   - 调用 `compare` 比较目标分支到源分支；分支比较时使用 `from=<目标分支>`、`to=<源分支>`、`sourceType="branch"`、`targetType="branch"`，默认使用 merge-base。
+   - 需要上下文时，用 `get_file_blobs` 分别读取源分支和目标分支文件内容；需要目录结构时用 `list_files`。
+   - 优先读取目标分支基线上的项目指南文件：`AGENTS.md`、`AGENT.md`、子目录内靠近改动文件的 `AGENTS.md` / `AGENT.md`，再读取源分支同路径版本。源分支修改了指南文件时，把指南变更本身作为 MR 变更审查，不要直接用新规则覆盖基线规则。
+   - 查看源分支 `spec/` 目录下与 MR 标题、分支名、工作项 ID、提交信息或改动模块相关的规格文件；没有提交或找不到对应 spec 时忽略，并在最终总结评论里标注“未发现对应 spec”。
+   - 需要追溯动机或拆分变更时，用 `list_commits` 和 `get_commit` 查看源分支提交。
+   - MR 关联了工作项且用户要求核对需求时，用 `get_work_item`、`list_work_item_comments`、`list_workitem_attachments`、`get_workitem_file` 补需求、验收说明和附件证据。
+3. 建立 Review Package：
+   - `实现内容`：基于 MR 描述、提交和 diff 概括，不照抄作者描述。
+   - `规格/验收场景`：来自 `spec/`、关联工作项或 MR 描述；没有就写 `None provided`。
+   - `目标基线`：目标分支名和用于比较的基线版本或 patch set。
+   - `源分支头部`：源分支名、最新提交或最新 patch set。
+   - `测试证据`：只记录测试文件变更、MR 描述里的测试结果、已有流水线结果或人工验证说明；没有就写“未发现测试证据”，不要为了补证据而运行测试。
+   - `已知风险/缺失上下文`：权限不足、文件过大未读、spec 缺失、评论写入失败等。
+4. 做代码审核：
+   - 先用目标分支基线的 `AGENTS.md` / `AGENT.md` 理解项目架构、目录职责、命名约定、测试策略和禁用做法；如果源分支修改了这些文件，单独说明规则变化及其影响。审核风格和架构一致性时要引用基线约定。
+   - 再用对应 spec 判断分支是否实现了预期功能、是否遗漏验收条件、是否引入规格外行为；没有 spec 时只基于代码和 MR 描述审核，不臆造需求。
+   - 先看高风险文件：鉴权、权限、支付、数据迁移、配置、部署、并发、缓存、错误处理、外部 API、持久化、测试改动。
+   - 大 MR 先按文件和风险聚类；不要平均扫所有格式化或生成文件。
+   - 对每个候选问题，确认它能由当前 diff 触发，并说明触发条件、影响和最小修复方向。
+   - 需要更细的检查清单时，读取 `references/review-guidelines.md`。
+5. 输出结果：
+   - 先列 `审核发现`，按 `P0`、`P1`、`P2`、`P3` 排序。
+   - 每条发现包含：严重级别、文件行号、问题、证据、影响、建议。
+   - 对明确且可行动的问题，按“评论写入流程”主动写入 MR 评论；没有明确问题时不写评论。
+   - 无论是否发现问题，都按“最终总结评论”在 MR 上发布一条全局总结，方便人工 review。
+   - 再给 `审核摘要`：MR 状态、源分支到目标分支、Review Package 摘要、已有未解决评论、主要风险面、评论写入结果和结论。
+   - 最后给 `测试与验证缺口`，只列和风险直接相关的缺口。
+
+## 发现级别
+
+- `P0`：会导致生产事故、数据破坏、严重安全漏洞、无法启动或无法合并的阻塞问题。
+- `P1`：高概率功能回归、权限绕过、数据不一致、兼容性破坏或关键流程失败。
+- `P2`：边界条件错误、可恢复但真实的行为缺陷、重要测试缺口或可观测性缺口。
+- `P3`：低风险问题，例如误导性文案、非阻塞清理项。不要把纯风格偏好写成 P3。
+
+## 审核结论
+
+- `NEEDS_CHANGES`：存在 `P0` 或 `P1`，或存在必须修复的规格偏离、关键测试缺口、数据/安全/兼容性风险。
+- `NEEDS_CONTEXT`：无法取得关键 diff、文件内容、基线规则、规格/验收材料、patch set 或评论写入验证结果，导致无法公平判断。
+- `APPROVED`：未发现阻塞合并的问题，且 Review Package 中没有会影响判断的关键证据缺口；可带非阻塞备注。
+
+## 评论写入流程
+
+1. 写入前必须已经完成去重：查询已有未解决评论，避免重复发布同一问题。
+2. 只评论明确、可行动、能定位到当前 diff 或相关文件的问题；低价值风格建议默认只放在最终回复里，不写入 MR。
+3. 调用 Yunxiao MCP 时必须按当前工具 schema 传参，不要把 REST API 文档里的 `repositoryIdentity`、`commentType`、`filePath`、`patchSetBizId` 等字段名直接传给 MCP。
+   - `content` 长度保持在 1 到 65535 之间。总结评论仍按本 skill 的长度目标压缩，避免接近上限。
+   - `parent_comment_biz_id` 只在回复已有评论时传；创建根评论时不传。
+   - 创建根评论时显式设置 `resolved=false`：行内问题评论、全局问题评论和最终总结评论都不要标记为已解决；回复评论按上下文决定是否设置。
+   - 评论层级一般不要超过 3 层；自动回复已有评论时避免继续加深层级。
+4. 调用 `create_change_request_comment`：
+   - 最终总结评论固定使用 `comment_type="GLOBAL_COMMENT"`，`patchset_biz_id` 使用最新合并源版本 ID，并显式设置 `resolved=false`。
+   - 能可靠定位到当前 diff 新增或修改行的问题评论，使用 `comment_type="INLINE_COMMENT"`，必须提供 `file_path`、`line_number`、`from_patchset_biz_id`、`to_patchset_biz_id` 和 `patchset_biz_id`，并显式设置 `resolved=false`。
+   - 无法可靠映射新文件行号、跨多个文件、缺少具体行号或属于总体风险的问题评论，使用 `comment_type="GLOBAL_COMMENT"`，在内容里写明文件路径和代码位置，并显式设置 `resolved=false`。
+   - 问题类 `GLOBAL_COMMENT` 不能使用最终总结标记 `<!-- yunxiao-mr-reviewer:final-summary -->`，最终总结 `GLOBAL_COMMENT` 不能承载未解决问题详情。
+   - 评论正文使用 Markdown；行内评论优先用短段落或短列表，全局总结可使用二级标题、列表、代码块和普通文本流程说明，不使用 Mermaid。
+   - 默认发布正式评论；只有用户明确要求草稿时才设置 `draft=true`。
+5. 写入后调用 `list_change_request_comments` 验证评论存在，并输出成功项、失败项和未写项。
+
+## 最终总结评论
+
+最终总结评论是单独的 `GLOBAL_COMMENT`，不替代 `INLINE_COMMENT` 文件行内问题评论，也不替代问题类 `GLOBAL_COMMENT`。每次完整审核 MR 后都发布一条，除非用户明确要求只本地输出不写云效。
+
+1. 使用 `comment_type="GLOBAL_COMMENT"` 调用 `create_change_request_comment`，`patchset_biz_id` 使用最新合并源版本 ID，并显式设置 `resolved=false`，让最终总结保留为未解决评论，方便人工 review 跟进。
+2. 评论内容必须包含稳定标记 `<!-- yunxiao-mr-reviewer:final-summary -->`。只有已有评论同时包含该标记和标题 `## AI Review 最终总结` 时，才允许用 `update_change_request_comment` 更新同一条；更新时也必须显式传 `resolved=false`，避免沿用已有评论的已解决状态；否则新建，避免误改人工评论。
+3. 评论标题固定使用 `## AI Review 最终总结`，内容包含：
+   - `变更概览`：一句话说明分支解决什么问题，列出主要模块和关键文件。
+   - `项目约定依据`：列出读取到的 `AGENTS.md` / `AGENT.md` 路径和影响本次审核的约定；没有则写“未发现项目 AGENT 指南”。
+   - `规格对应关系`：列出读取到的 `spec/` 文件、覆盖的需求点、未覆盖或未找到 spec 的说明。
+   - `实现流程`：使用有序列表、缩进子列表或短代码块描述关键调用链、状态流转或数据流；流程未知时用模块级流程，不编造运行时细节。
+     - 不使用 Mermaid 代码块，也不要输出 `graph TD`、`flowchart`、`sequenceDiagram` 等图表语法。
+     - 每一步用短句说明“入口 -> 处理 -> 分支 -> 输出/持久化”，分支用 `命中指令`、`进入对话` 这类短标签。
+     - 复杂流程拆成多个小节或列表，优先保证云效评论区能直接阅读。
+   - `核心实现说明`：按模块说明新增/修改的职责、入口、关键分支和边界处理。
+   - `测试与验证`：列出已有测试证据、缺口和建议人工验证路径，并说明 AI 未执行测试用例。
+   - `人工 review 重点`：列出需要人工重点看的文件、风险点和业务确认项。
+   - `AI 审核结论`：使用 `APPROVED` / `NEEDS_CHANGES` / `NEEDS_CONTEXT`，总结是否发现阻塞问题、已写入的问题评论数量、残余风险。
+4. 总结评论以帮助人工 review 为目标，可以比行内评论更详细；但不要粘贴大段源码或完整 diff。
+5. 控制总结评论长度，目标不超过 40000 字符。超过时按优先级保留 `变更概览`、`实现流程`、`人工 review 重点`、`AI 审核结论`，把逐文件说明压缩成模块级摘要，避免超过云效评论长度上限导致写入失败。
+
+## 禁止事项
+
+- 不调用应用交付的 `list_appstack_change_requests`、`close_appstack_change_request`、`cancel_appstack_change_request` 来处理 Codeup MR；它们是另一类变更请求。
+- 不执行合并、关闭、删除分支、删除文件、修改文件、运行流水线或发布部署，除非用户另行明确要求并走对应高风险确认流程；发布 MR 审核评论不需要二次确认。
+- 不运行任何测试用例或测试命令，包括但不限于 `go test`、`npm test`、`pnpm test`、`yarn test`、`pytest`、`mvn test`、`gradle test`，也不通过云效测试管理工具创建、执行或更新测试结果。
+- 不把“已有测试文件被修改”直接当作测试充分；要说明测试覆盖了什么风险。
+- 不因为个人偏好的命名、格式、抽象层级提出阻塞意见；只有影响可读性到足以掩盖缺陷时才作为低优先级建议。
+
+## 输出模板
+
+```markdown
+**审核发现**
+- `P1` [path/to/file.ts:42] 问题标题
+  证据：说明 diff 中哪段逻辑会触发问题。
+  影响：说明用户、数据、权限或流程会怎样受影响。
+  建议：给出最小修复方向。
+
+**审核摘要**
+- 结论：`APPROVED` / `NEEDS_CHANGES` / `NEEDS_CONTEXT`
+- MR：标题，`source` -> `target`，状态
+- Review Package：实现内容、规格/验收场景、基线、头部、测试证据、已知风险摘要
+- 已有评论：未解决评论数量和主题
+- 最终总结评论：已创建/已更新/失败及原因
+- 主要风险：一句话总结
+
+**测试与验证缺口**
+- 缺口及其对应风险；没有缺口时写“未发现明显测试缺口”。
+```

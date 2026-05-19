@@ -1,7 +1,7 @@
 {
   "name": "yunxiao-work-assistant-plugin",
   "version": "0.1.0",
-  "description": "基于云效 MCP 的 DevOps 助手包，覆盖云效查询、受控变更、个人工作计划、需求分支管理和周报生成。",
+  "description": "基于云效 MCP 的 DevOps 助手包，覆盖云效查询、MR 审核、受控变更、个人工作计划、需求分支管理和周报生成。",
   "author": {
     "name": "Yunxiao Work Assistant Maintainers"
   },
@@ -16,6 +16,8 @@
     "pipeline",
     "deployment",
     "test-management",
+    "merge-request",
+    "code-review",
     "work-plan",
     "weekly-report"
   ],
@@ -23,8 +25,8 @@
   "mcpServers": "./.codex.mcp.json",
   "interface": {
     "displayName": "Yunxiao Work Assistant",
-    "shortDescription": "通过云效 MCP 规划工作、写周报并执行受控 DevOps 操作",
-    "longDescription": "使用 Yunxiao Work Assistant 查询云效组织、项目、工作项、流水线、应用交付和测试管理信息，生成个人本周计划或周报，为需求关联已有分支或创建开发分支，并在确认清单后执行受控写操作。",
+    "shortDescription": "通过云效 MCP 审核 MR、规划工作、写周报并执行受控 DevOps 操作",
+    "longDescription": "使用 Yunxiao Work Assistant 查询云效组织、项目、工作项、Codeup 仓库、合并请求、流水线、应用交付和测试管理信息，审核 MR 变更风险并写入审核评论，生成个人本周计划或周报，为需求关联已有分支或创建开发分支；除 MR 审核评论外，其他受控写操作仍先给出确认清单。",
     "developerName": "Yunxiao Work Assistant Maintainers",
     "category": "Productivity",
     "capabilities": [
@@ -35,6 +37,7 @@
     "websiteURL": "https://github.com/NSObjects/yunxiao-work-assistant-plugin",
     "defaultPrompt": [
       "根据云效当前迭代和延期事项规划这周工作",
+      "审核云效 Codeup MR 的 diff、项目指南和 spec 规格，把明确问题和最终总结写入 MR 评论",
       "把确认后的周计划写回云效预计工时和计划日期",
       "为云效需求创建开发分支并记录关联",
       "结合云效工作项和云效代码提交生成本周周报"
