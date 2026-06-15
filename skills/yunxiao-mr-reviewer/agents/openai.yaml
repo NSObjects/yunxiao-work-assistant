@@ -1,7 +1,7 @@
 interface:
   display_name: "云效 MR 审核助手"
   short_description: "结合项目指南和规格审核 MR，并写入问题与总结评论"
-  default_prompt: "使用 $yunxiao-mr-reviewer 帮我审核这个云效 Codeup MR，读取 AGENTS/AGENT 指南和 spec 规格，形成 Review Package，发现明确问题时按固定模板写入代码评论，最后发布一条包含结构化实现流程和结论的最终总结评论。"
+  default_prompt: "使用 $yunxiao-mr-reviewer 帮我审核这个云效 Codeup MR，读取 AGENT 指南和 specs 规格，形成 Review Package，发现明确问题时按固定模板写入代码评论，最后发布一条包含结构化实现流程和结论的最终总结评论。"
 
 dependencies:
   tools:
