@@ -11,7 +11,9 @@ Use this skill to turn SLS-backed production questions into evidence-first inves
 
 ## Setup
 
-If the Alibaba Cloud Observability MCP tools are unavailable, unhealthy, or not configured in Codex, run:
+If this skill was installed through the plugin, Codex should already have an `alibaba_cloud_observability` MCP server from the plugin `.mcp.json`. If the tools are still unavailable, first restart Codex so plugin MCP servers are reloaded.
+
+If this skill was installed as a standalone skill rather than through the plugin, run:
 
 ```bash
 python3 scripts/setup_observability_mcp.py
@@ -19,7 +21,7 @@ python3 scripts/setup_observability_mcp.py
 
 Resolve `scripts/setup_observability_mcp.py` relative to this `SKILL.md`; do not assume the skill is installed under `$CODEX_HOME/skills`, because it may be loaded from a plugin checkout.
 
-The default setup uses `stdio`: Codex starts the local MCP binary on demand and passes credentials through `[mcp_servers.alibaba_cloud_observability.env]`. The script syncs these variables from the current process environment or from `~/alibabacloud-observability-mcp-server/.env`: `ALIBABA_CLOUD_ACCESS_KEY_ID`, `ALIBABA_CLOUD_ACCESS_KEY_SECRET`, `ALIBABA_CLOUD_SECURITY_TOKEN`, `ALIBABA_CLOUD_REGION`, and `ALIBABA_CLOUD_WORKSPACE`.
+The default setup uses `stdio`: Codex starts the local MCP binary on demand and passes credentials through MCP environment variables. The plugin wrapper and setup script both read these variables from the current process environment or from `~/alibabacloud-observability-mcp-server/.env`: `ALIBABA_CLOUD_ACCESS_KEY_ID`, `ALIBABA_CLOUD_ACCESS_KEY_SECRET`, `ALIBABA_CLOUD_SECURITY_TOKEN`, `ALIBABA_CLOUD_REGION`, and `ALIBABA_CLOUD_WORKSPACE`.
 
 The script is idempotent: it checks `~/alibabacloud-observability-mcp-server`, builds the Go server only when the binary is missing, and writes/updates only the `alibaba_cloud_observability` MCP entry in `${CODEX_HOME:-$HOME/.codex}/config.toml`.
 

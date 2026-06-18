@@ -15,15 +15,40 @@
 
 ## 安装
 
+如果希望让 Codex 自己执行安装和验证，直接让它读取本仓库的 `INSTALL.md`。
+
 ### Codex
 
-在 Codex 中安装本地插件目录：
+Codex 当前通过 marketplace snapshot 安装插件。把本插件目录放进一个本地 marketplace 后再安装：
 
-```text
-/plugin install /Users/lintao/workspace/tools/yunxiao/yunxiao-work-assistant-plugin
+```bash
+MARKET_ROOT=/tmp/yunxiao-work-assistant-marketplace
+PLUGIN_DIR=/Users/lintao/workspace/tools/yunxiao/yunxiao-work-assistant-plugin
+
+rm -rf "$MARKET_ROOT"
+mkdir -p "$MARKET_ROOT/plugins" "$MARKET_ROOT/.agents/plugins"
+rsync -a --exclude .git "$PLUGIN_DIR/" "$MARKET_ROOT/plugins/yunxiao-work-assistant-plugin/"
+
+cat > "$MARKET_ROOT/.agents/plugins/marketplace.json" <<'JSON'
+{
+  "name": "yunxiao-work-assistant-local",
+  "plugins": [
+    {
+      "name": "yunxiao-work-assistant-plugin",
+      "source": {"source": "local", "path": "./plugins/yunxiao-work-assistant-plugin"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
+    }
+  ]
+}
+JSON
+
+codex plugin marketplace add "$MARKET_ROOT"
+codex plugin add yunxiao-work-assistant-plugin@yunxiao-work-assistant-local
+codex mcp list
 ```
 
-Codex 清单文件是 `.codex-plugin/plugin.json`。该清单加载 `./skills/`，并通过 `.mcp.json` 启动 `yunxiao` MCP 服务。
+Codex 清单文件是 `.codex-plugin/plugin.json`。该清单加载 `./skills/`，并通过 `.mcp.json` 注册 `yunxiao` 和 `alibaba_cloud_observability` MCP 服务。只单独安装 skill 不会自动合并插件里的 `.mcp.json`。
 
 ### Claude Code
 
@@ -161,7 +186,9 @@ MR 审核会形成 Review Package：实现内容、规格/验收场景、目标�
 python3 skills/analyze-aliyun-sls-logs/scripts/setup_observability_mcp.py
 ```
 
-脚本会配置 `alibaba_cloud_observability` MCP，并从当前环境或 `~/alibabacloud-observability-mcp-server/.env` 同步阿里云凭据。不要把 AccessKey 或临时凭据粘贴到对话里。
+通过 Codex 插件安装时，`.mcp.json` 会同时注册 `alibaba_cloud_observability` MCP；Codex 重新加载插件后会按需启动它。首次启动时插件内置 wrapper 会检查 `~/alibabacloud-observability-mcp-server`，缺失时优先下载官方 release 二进制，下载失败时再 fallback 到 clone/build。
+
+如果是单独安装 skill 而不是安装插件，脚本会配置 `alibaba_cloud_observability` MCP，并从当前环境或 `~/alibabacloud-observability-mcp-server/.env` 同步阿里云凭据。不要把 AccessKey 或临时凭据粘贴到对话里。
 
 ## 写操作策略
 
@@ -219,12 +246,12 @@ export YUNXIAO_READ_ONLY_GUARD=1
 ## 排障
 
 1. 确认 Node.js：`node -v`，需要 `>= 18.0.0`。
-2. 确认客户端已加载插件，且工具列表里存在 `yunxiao` MCP。
+2. 确认客户端已加载插件，且 `codex mcp list` 里存在 `yunxiao` 和 `alibaba_cloud_observability` MCP。
 3. 确认 `YUNXIAO_ACCESS_TOKEN` 有目标模块权限。
 4. Region 站优先检查 `YUNXIAO_API_BASE_URL` 是否是组织实例域名。
 5. 工具缺失时检查 `DEVOPS_TOOLSETS` 是否只启用了部分模块。
 6. 写操作被拒绝时检查 `YUNXIAO_READ_ONLY_GUARD` 是否开启。
-7. SLS 分析工具不可用时，运行 `skills/analyze-aliyun-sls-logs/scripts/setup_observability_mcp.py` 并重启 Codex 会话。
+7. SLS 分析工具不可用时，先确认是安装了整个 Codex 插件，而不是只安装了 skill；如果是单独 skill 安装，运行 `skills/analyze-aliyun-sls-logs/scripts/setup_observability_mcp.py` 并重启 Codex 会话。
 
 ## 许可
 

@@ -7,6 +7,23 @@
         "-y",
         "alibabacloud-devops-mcp-server"
       ]
+    },
+    "alibaba_cloud_observability": {
+      "type": "stdio",
+      "cwd": ".",
+      "command": "python3",
+      "args": [
+        "./skills/analyze-aliyun-sls-logs/scripts/run_observability_mcp.py"
+      ],
+      "env_vars": [
+        "ALIBABA_CLOUD_ACCESS_KEY_ID",
+        "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
+        "ALIBABA_CLOUD_SECURITY_TOKEN",
+        "ALIBABA_CLOUD_REGION",
+        "ALIBABA_CLOUD_WORKSPACE"
+      ],
+      "startup_timeout_sec": 180,
+      "tool_timeout_sec": 610
     }
   }
 }
