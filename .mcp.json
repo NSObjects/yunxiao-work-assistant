@@ -1,14 +1,12 @@
 {
-  "yunxiao": {
-    "type": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "alibabacloud-devops-mcp-server"
-    ],
-    "env": {
-      "YUNXIAO_ACCESS_TOKEN": "${user_config.yunxiao_access_token}",
-      "YUNXIAO_API_BASE_URL": "${user_config.yunxiao_api_base_url}"
+  "mcpServers": {
+    "yunxiao": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "alibabacloud-devops-mcp-server"
+      ]
     }
   }
 }

@@ -1,10 +1,11 @@
 # 云效工作助手插件
 
-`yunxiao-work-assistant-plugin` 是面向 Claude Code 与 Codex 的云效 MCP 插件，内置三套技能：
+`yunxiao-work-assistant-plugin` 是面向 Claude Code 与 Codex 的云效 MCP 插件，内置四套技能：
 
 - `yunxiao-devops-assistant`：覆盖组织、代码、项目/工作项、流水线、制品、应用交付、测试管理。
 - `yunxiao-work-assistant`：聚焦个人周计划、计划写回、需求分支管理、周报生成。
 - `yunxiao-mr-reviewer`：聚焦云效 Codeup MR 审核，读取项目指南和规格，写入格式统一的问题评论与最终总结评论。
+- `analyze-aliyun-sls-logs`：聚焦阿里云 SLS 告警、错误峰值、日志模式变化和设备/request/trace ID 排障，并可配置 Alibaba Cloud Observability MCP。
 
 插件通过 `npx -y alibabacloud-devops-mcp-server` 连接云效，并遵循“先查询、再判断、后变更”的执行模式。
 
@@ -100,7 +101,7 @@ claude --plugin-dir <plugin-dir>
 
 - Codex 清单位于 `.codex-plugin/plugin.json`。
 - 本地目录名需与 `.codex-plugin/plugin.json` 的 `name` 一致（当前为 `yunxiao-work-assistant-plugin`）。
-- Codex 通过 `.codex.mcp.json` 启动 Yunxiao MCP，默认从进程环境读取云效配置。
+- Codex 通过 `.mcp.json` 启动 Yunxiao MCP，默认从进程环境读取云效配置；Claude 插件通过 `.claude.mcp.json` 使用 userConfig 注入云效令牌。
 - 启动 Codex 前建议先设置 `YUNXIAO_ACCESS_TOKEN` 与 `YUNXIAO_API_BASE_URL`。
 
 ## 配置
@@ -192,11 +193,19 @@ export YUNXIAO_READ_ONLY_GUARD=1
 ├── .codex-plugin/
 │   └── plugin.json
 ├── .mcp.json
-├── .codex.mcp.json
+├── .claude.mcp.json
 ├── hooks/
 │   ├── block_yunxiao_writes.py
 │   └── hooks.json
 ├── skills/
+│   ├── analyze-aliyun-sls-logs/
+│   │   ├── agents/
+│   │   │   └── openai.yaml
+│   │   ├── references/
+│   │   │   └── sls-analysis-playbook.md
+│   │   ├── scripts/
+│   │   │   └── setup_observability_mcp.py
+│   │   └── SKILL.md
 │   ├── yunxiao-devops-assistant/
 │   │   ├── agents/
 │   │   │   └── openai.yaml

@@ -1,0 +1,11 @@
+interface:
+  display_name: "Analyze Aliyun SLS Logs"
+  short_description: "Analyze Alibaba Cloud SLS logs via MCP"
+  default_prompt: "Use $analyze-aliyun-sls-logs to investigate an Alibaba Cloud SLS alert or error-log spike."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "alibaba_cloud_observability"
+      description: "Alibaba Cloud Observability MCP server for SLS/CMS queries"
+      transport: "stdio"

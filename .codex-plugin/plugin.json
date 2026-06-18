@@ -22,7 +22,7 @@
     "weekly-report"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.codex.mcp.json",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Yunxiao Work Assistant",
     "shortDescription": "通过云效 MCP 审核 MR、规划工作、写周报并执行受控 DevOps 操作",

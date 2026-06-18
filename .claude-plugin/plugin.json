@@ -23,7 +23,7 @@
   ],
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json",
-  "mcpServers": "./.mcp.json",
+  "mcpServers": "./.claude.mcp.json",
   "userConfig": {
     "yunxiao_access_token": {
       "type": "string",
