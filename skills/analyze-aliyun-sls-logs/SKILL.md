@@ -14,8 +14,10 @@ Use this skill to turn SLS-backed production questions into evidence-first inves
 If the Alibaba Cloud Observability MCP tools are unavailable, unhealthy, or not configured in Codex, run:
 
 ```bash
-python3 "${CODEX_HOME:-$HOME/.codex}/skills/analyze-aliyun-sls-logs/scripts/setup_observability_mcp.py" --start
+python3 scripts/setup_observability_mcp.py
 ```
+
+Resolve `scripts/setup_observability_mcp.py` relative to this `SKILL.md`; do not assume the skill is installed under `$CODEX_HOME/skills`, because it may be loaded from a plugin checkout.
 
 The default setup uses `stdio`: Codex starts the local MCP binary on demand and passes credentials through `[mcp_servers.alibaba_cloud_observability.env]`. The script syncs these variables from the current process environment or from `~/alibabacloud-observability-mcp-server/.env`: `ALIBABA_CLOUD_ACCESS_KEY_ID`, `ALIBABA_CLOUD_ACCESS_KEY_SECRET`, `ALIBABA_CLOUD_SECURITY_TOKEN`, `ALIBABA_CLOUD_REGION`, and `ALIBABA_CLOUD_WORKSPACE`.
 
@@ -24,7 +26,7 @@ The script is idempotent: it checks `~/alibabacloud-observability-mcp-server`, b
 Use a persistent local HTTP server only when needed:
 
 ```bash
-python3 "${CODEX_HOME:-$HOME/.codex}/skills/analyze-aliyun-sls-logs/scripts/setup_observability_mcp.py" --mode http --start
+python3 scripts/setup_observability_mcp.py --mode http --start
 ```
 
 Do not ask the user to paste AccessKey values into chat. If credentials are missing, tell the user to set them in the local shell environment or edit the server `.env` file, then rerun the setup script so Codex MCP env is updated.

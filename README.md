@@ -1,187 +1,184 @@
 # 云效工作助手插件
 
-`yunxiao-work-assistant-plugin` 是面向 Claude Code 与 Codex 的云效 MCP 插件，内置四套技能：
+`yunxiao-work-assistant-plugin` 是面向 Codex 和 Claude Code 的云效 MCP 插件。它通过 `npx -y alibabacloud-devops-mcp-server` 接入云效，提供 DevOps 查询与受控变更、Codeup MR 审核、个人工作计划与周报、阿里云 SLS 日志分析四类能力。
 
-- `yunxiao-devops-assistant`：覆盖组织、代码、项目/工作项、流水线、制品、应用交付、测试管理。
-- `yunxiao-work-assistant`：聚焦个人周计划、计划写回、需求分支管理、周报生成。
-- `yunxiao-mr-reviewer`：聚焦云效 Codeup MR 审核，读取项目指南和规格，写入格式统一的问题评论与最终总结评论。
-- `analyze-aliyun-sls-logs`：聚焦阿里云 SLS 告警、错误峰值、日志模式变化和设备/request/trace ID 排障，并可配置 Alibaba Cloud Observability MCP。
+插件的默认工作方式是：先查询真实云效数据，再给判断；涉及高风险或非审核类写操作时，先给确认清单，得到明确确认后再执行，并在写入后回查验证。
 
-插件通过 `npx -y alibabacloud-devops-mcp-server` 连接云效，并遵循“先查询、再判断、后变更”的执行模式。
+## 当前能力
 
-## 技能总览
-
-### `yunxiao-devops-assistant`
-
-定位：通用云效 DevOps 助手，用于查询、诊断、变更规划与受控写操作。
-
-能力范围：
-
-- 组织管理：组织、角色、部门、成员查询。
-- 代码管理：仓库、分支、提交、MR、文件树与评论。
-- 项目协作：项目、迭代、版本、工作项、字段、评论、工时。
-- 流水线：运行记录、任务日志、YAML 更新、资源成员与标签。
-- 应用交付：部署单、变更请求、编排、变量组、发布阶段。
-- 测试管理：测试目录、用例、测试计划、结果更新。
-
-执行约束：
-
-- 高风险动作（删除、终止、跳过、重试、发布、部署、权限移交等）必须先输出确认清单。
-- 不臆造组织/项目/仓库/流水线/应用等对象 ID。
-- 写操作后必须回查验证结果。
-
-### `yunxiao-work-assistant`
-
-定位：个人工作流助手，目标固定为四类任务：
-
-- 规划工作
-- 写回周计划
-- 需求分支管理
-- 写周报
-
-关键规则：
-
-- 默认按 `assignedTo: "self"` 查询。
-- 工作计划默认覆盖“当前迭代 + 延期旧迭代未完成事项”。
-- 工作计划按每天 8h 常规容量排期；必要时可安排单日 2-3h 加班，并优先保证同一需求连续推进。
-- 未经用户明确确认，不执行计划写回或分支创建。
-- 周报代码证据只来自云效 Codeup（`list_commits` / `get_commit`），不读取本地 Git 历史。
-- 当前 MCP 不支持直接写入工作项“关联代码分支”原生区域时，改为写工作项评论记录关联。
-
-### `yunxiao-mr-reviewer`
-
-定位：云效 Codeup MR 审核助手，用于拉取 MR、patch set、diff、项目指南、规格和已有评论，输出可行动审核发现，并按固定 Markdown 模板写入云效评论。
-
-关键规则：
-
-- 审核前形成 Review Package，包含实现内容、规格/验收场景、目标基线、源分支头部、测试证据和缺失上下文。
-- 问题评论和最终总结评论分开写；问题评论聚焦单个可行动风险，最终总结沉淀结构化实现流程和人工 review 重点。
-- 评论不使用 Mermaid、HTML 或表格，避免云效评论区渲染不稳定。
-- MR 审核只读取已有测试证据，不运行本地测试、云效流水线或测试计划。
-
-## 与旧版相比的重点变化
-
-- 技能结构已从“单段说明”升级为“SKILL + references + agents”三层结构。
-- `yunxiao-work-assistant` 强化了计划边界：当前迭代、延期旧迭代、`TODOLIST` 区分处理。
-- 写回规则收敛为：仅 `预计工时 + 计划开始时间 + 计划完成时间`，并要求字段 ID 先识别再写回。
-- 周报规则收敛为：工作项双查询去重 + 云效代码提交证据 + 未关联提交单列。
-- 分支管理新增明确边界：`create_branch` 只建分支，关联信息默认落评论。
+| 技能 | 适用场景 | 关键边界 |
+|---|---|---|
+| `yunxiao-devops-assistant` | 查询或管理云效组织、代码仓库、项目工作项、流水线、制品、应用交付、测试管理 | 不臆造对象 ID；生产、删除、发布、部署、权限、变量等高风险动作必须先确认 |
+| `yunxiao-work-assistant` | 生成个人周计划、写回计划字段、需求分支管理、生成周报 | 默认查 `assignedTo: "self"`；周计划默认覆盖当前迭代和延期旧迭代；写回只限预计工时、计划开始时间、计划完成时间 |
+| `yunxiao-mr-reviewer` | 审核云效 Codeup MR，读取 MR、patch set、diff、项目指南、规格和已有评论，并写入问题评论与最终总结 | 审核只基于已有证据，不运行本地测试、云效流水线或测试计划；问题评论和最终总结分开写 |
+| `analyze-aliyun-sls-logs` | 分析阿里云 SLS 告警、错误峰值、日志模式变化、设备/request/trace ID 排障 | 优先聚合再抽样；缺少 SLS MCP 配置时使用插件内脚本配置 Alibaba Cloud Observability MCP |
 
 ## 安装
 
-### Claude Code
-
-从 marketplace 安装（已发布时）：
-
-```text
-/plugin marketplace add <marketplace>
-/plugin install yunxiao-work-assistant@<marketplace-name>
-```
-
-本地调试：
-
-```bash
-claude --plugin-dir <plugin-dir>
-```
-
-相关清单文件：
-
-- `.claude-plugin/plugin.json`
-- `.claude-plugin/marketplace.json`
-
 ### Codex
 
-本地安装：
+在 Codex 中安装本地插件目录：
 
 ```text
-/plugin install <plugin-dir>
+/plugin install /Users/lintao/workspace/tools/yunxiao/yunxiao-work-assistant-plugin
 ```
 
-注意：
+Codex 清单文件是 `.codex-plugin/plugin.json`。该清单加载 `./skills/`，并通过 `.mcp.json` 启动 `yunxiao` MCP 服务。
 
-- Codex 清单位于 `.codex-plugin/plugin.json`。
-- 本地目录名需与 `.codex-plugin/plugin.json` 的 `name` 一致（当前为 `yunxiao-work-assistant-plugin`）。
-- Codex 通过 `.mcp.json` 启动 Yunxiao MCP，默认从进程环境读取云效配置；Claude 插件通过 `.claude.mcp.json` 使用 userConfig 注入云效令牌。
-- 启动 Codex 前建议先设置 `YUNXIAO_ACCESS_TOKEN` 与 `YUNXIAO_API_BASE_URL`。
+### Claude Code
+
+本地 marketplace 文件是 `.claude-plugin/marketplace.json`，插件清单是 `.claude-plugin/plugin.json`。
+
+```text
+/plugin marketplace add /Users/lintao/workspace/tools/yunxiao/yunxiao-work-assistant-plugin
+/plugin install yunxiao-work-assistant@yunxiao-work-assistant-local
+```
+
+Claude Code 会加载 `./skills/`、`./hooks/hooks.json` 和 `.claude.mcp.json`。云效令牌通过插件用户配置注入到 MCP 服务环境变量中。
 
 ## 配置
 
-### 必需环境
+### 必需条件
 
-- Node.js `>= 20.0.0`
-- 云效个人访问令牌（按实际任务授予权限）
+- Node.js `>= 18.0.0`
+- 云效个人访问令牌
+- 令牌权限覆盖实际要查询或变更的云效模块
 
-### 推荐环境变量
+### 环境变量
+
+Codex 使用 `.mcp.json` 启动 Yunxiao MCP，默认从进程环境读取令牌和 API 地址：
 
 ```bash
 export YUNXIAO_ACCESS_TOKEN="<your-token>"
 export YUNXIAO_API_BASE_URL="https://openapi-rdc.aliyuncs.com"
 ```
 
-Region 站请使用组织专属域名，例如：
+中心站默认 API 地址是 `https://openapi-rdc.aliyuncs.com`。Region 站填写组织实例域名，例如：
 
 ```text
 https://your-org.devops.aliyuncs.com
 ```
 
-### Claude 用户配置项
+常用上下文也可以通过环境变量提供，减少每次对话里的参数补充：
+
+```bash
+export YUNXIAO_ORGANIZATION_ID="<organization-id>"
+export YUNXIAO_SPACE_ID="<space-id>"
+```
+
+### Claude Code 用户配置
 
 | 配置项 | 说明 | 默认值 |
 |---|---|---|
-| `yunxiao_access_token` | 云效个人访问令牌（敏感） | 无 |
+| `yunxiao_access_token` | 云效个人访问令牌，敏感配置 | 无 |
 | `yunxiao_api_base_url` | 云效 API 基础地址 | `https://openapi-rdc.aliyuncs.com` |
 
-## 技能使用建议
+### MCP 工具集
 
-### 触发 `yunxiao-devops-assistant`
+不限制 toolsets 时，`alibabacloud-devops-mcp-server` 会暴露全部云效工具。需要缩小工具范围时，可通过命令行参数或环境变量配置：
 
-适用于：流水线失败诊断、部署问题排查、MR/仓库治理、云效模块化查询与受控变更。
-
-示例：
-
-```text
-使用 $yunxiao-devops-assistant 帮我检查云效项目、流水线和部署风险；需要写操作时先给出确认清单。
+```bash
+npx -y alibabacloud-devops-mcp-server --toolsets=code-management,project-management
 ```
 
-### 触发 `yunxiao-work-assistant`
-
-适用于：个人周计划、计划写回、需求分支协作、周报汇总。
-
-示例：
-
-```text
-使用 $yunxiao-work-assistant 帮我读取云效待办，安排本周工作；需要写回计划日期、预计工时或创建需求分支时先给我确认清单。
+```bash
+export DEVOPS_TOOLSETS="code-management,project-management"
 ```
 
-### 触发 `yunxiao-mr-reviewer`
+常用 toolsets：
 
-适用于：云效 Codeup MR 审核、变更 diff 风险检查、按项目指南和 spec 核对实现、写入问题评论和最终总结评论。
+| toolset | 范围 |
+|---|---|
+| `organization-management` | 组织、部门、角色、成员 |
+| `code-management` | 仓库、分支、合并请求、文件树、提交 |
+| `project-management` | 项目、工作项、字段、评论、工时 |
+| `pipeline-management` | 流水线、运行、任务、资源、标签、机器部署 |
+| `packages-management` | 制品仓库、制品 |
+| `application-delivery` | 部署单、应用、标签、变量组、发布流程 |
+| `test-management` | 测试用例、测试计划、测试结果 |
 
-示例：
+## 使用方式
+
+### DevOps 查询与受控变更
 
 ```text
-使用 $yunxiao-mr-reviewer 帮我审核这个云效 Codeup MR，发现明确问题时按固定模板写入评论，最后发布结构化最终总结。
+使用 $yunxiao-devops-assistant 帮我检查这个云效流水线最近失败原因，先给证据和处理建议，需要执行变更时先列确认清单。
 ```
 
-## 写操作安全策略
+适合组织、项目、仓库、MR、流水线、制品、部署、应用交付、测试管理等云效对象的查询、诊断和受控写操作。写操作前必须明确工具、目标对象、提交字段、影响范围、验证方式和回滚方式。
 
-- 默认只读查询；写操作需要用户明确确认。
-- 写前应展示：工具、目标对象、提交字段、影响范围、验证方式、回滚方式。
-- 写后应执行回查，输出成功项、失败项与未写项。
+### 个人周计划与周报
 
-如需强制只读（Claude Code）：
+```text
+使用 $yunxiao-work-assistant 读取我当前迭代和延期旧迭代的未完成事项，安排这周工作。
+```
+
+```text
+使用 $yunxiao-work-assistant 根据本周云效工作项和 Codeup 提交生成周报。
+```
+
+工作计划默认每天按 8h 常规容量排期，必要时单独标注加班日期、小时数和原因。周报代码证据只来自云效 Codeup 的 `list_commits` / `get_commit`，不读取本地 Git 历史。
+
+写回周计划时，只写：
+
+- 预计工时
+- 计划开始时间
+- 计划完成时间
+
+写回前会先识别字段 ID，输出写回清单，并等待用户明确确认。不会顺手修改标题、描述、负责人、状态、优先级、迭代或实际工时。
+
+### 需求分支管理
+
+```text
+使用 $yunxiao-work-assistant 为这个工作项创建开发分支，来源分支用 main，创建前先确认仓库、分支名和写入方式。
+```
+
+当前 Yunxiao MCP 可以创建 Codeup 分支，但没有直接写入工作项“关联代码分支”区域的专用工具。插件会在创建或确认分支后，用工作项评论记录仓库、分支、链接和关联原因。
+
+### Codeup MR 审核
+
+```text
+使用 $yunxiao-mr-reviewer 审核这个云效 Codeup MR，读取 diff、项目 AGENT 指南和 specs，发现明确问题就写入评论，最后发布最终总结。
+```
+
+MR 审核会形成 Review Package：实现内容、规格/验收场景、目标基线、源分支头部、测试证据、已知风险和缺失上下文。明确且可行动的问题会写成行内评论或全局问题评论；每次完整审核会单独发布最终总结评论。
+
+审核结论使用：
+
+- `APPROVED`
+- `NEEDS_CHANGES`
+- `NEEDS_CONTEXT`
+
+### SLS 日志分析
+
+```text
+使用 $analyze-aliyun-sls-logs 分析这个 SLS 告警，时间窗口是 2026-06-18 10:00 到 10:30，项目和 logstore 是……
+```
+
+如果 Codex 里没有可用的 Alibaba Cloud Observability MCP，可以运行：
+
+```bash
+python3 skills/analyze-aliyun-sls-logs/scripts/setup_observability_mcp.py
+```
+
+脚本会配置 `alibaba_cloud_observability` MCP，并从当前环境或 `~/alibabacloud-observability-mcp-server/.env` 同步阿里云凭据。不要把 AccessKey 或临时凭据粘贴到对话里。
+
+## 写操作策略
+
+- 默认先查当前状态，再决定是否变更。
+- 非 MR 审核评论类写操作必须先给确认清单，并等待用户明确确认。
+- 高风险动作包括删除、终止、跳过、重试、发布、部署、权限移交、变量修改、生产环境操作。
+- 写入后必须用详情、列表、日志或评论查询回查结果。
+- 输出时区分云效返回事实、代码或日志证据、推断建议。
+- 不输出访问令牌、流水线密钥、变量组敏感值或日志中的凭据。
+
+Claude Code 可开启只读保护：
 
 ```bash
 export YUNXIAO_READ_ONLY_GUARD=1
 ```
 
-启用后，`hooks/block_yunxiao_writes.py` 会拦截匹配到的云效写工具调用。
-
-## 更新机制
-
-- 本插件不提供独立“更新工具”。
-- 技能更新时，直接让 AI 拉取或同步插件内 `skills/` 目录即可。
-- `.claude-plugin/plugin.json` 与 `.codex-plugin/plugin.json` 都配置了 `"skills": "./skills/"`，会自动加载该目录。
+启用后，`hooks/block_yunxiao_writes.py` 会拦截云效 MCP 写工具调用。
 
 ## 目录结构
 
@@ -192,52 +189,42 @@ export YUNXIAO_READ_ONLY_GUARD=1
 │   └── plugin.json
 ├── .codex-plugin/
 │   └── plugin.json
-├── .mcp.json
 ├── .claude.mcp.json
+├── .mcp.json
 ├── hooks/
 │   ├── block_yunxiao_writes.py
 │   └── hooks.json
 ├── skills/
 │   ├── analyze-aliyun-sls-logs/
 │   │   ├── agents/
-│   │   │   └── openai.yaml
 │   │   ├── references/
-│   │   │   └── sls-analysis-playbook.md
 │   │   ├── scripts/
-│   │   │   └── setup_observability_mcp.py
 │   │   └── SKILL.md
 │   ├── yunxiao-devops-assistant/
 │   │   ├── agents/
-│   │   │   └── openai.yaml
 │   │   ├── references/
-│   │   │   ├── setup.md
-│   │   │   ├── tool-catalog.md
-│   │   │   └── workflows.md
 │   │   └── SKILL.md
-│   ├── yunxiao-work-assistant/
+│   ├── yunxiao-mr-reviewer/
 │   │   ├── agents/
-│   │   │   └── openai.yaml
 │   │   ├── references/
-│   │   │   ├── output-formats.md
-│   │   │   └── yunxiao-mcp.md
 │   │   └── SKILL.md
-│   └── yunxiao-mr-reviewer/
+│   └── yunxiao-work-assistant/
 │       ├── agents/
-│       │   └── openai.yaml
 │       ├── references/
-│       │   └── review-guidelines.md
 │       └── SKILL.md
-└── LICENSE
+├── LICENSE
+└── README.md
 ```
 
 ## 排障
 
-1. 检查 Node.js：`node -v`，需 `>= 20.0.0`。
-2. 检查插件是否加载，且 Yunxiao MCP 是否出现在工具列表。
-3. 检查 `YUNXIAO_ACCESS_TOKEN` 权限是否覆盖目标模块。
-4. Region 站错误优先核对 `YUNXIAO_API_BASE_URL`。
-5. 工具缺失时检查是否限制了 `toolsets`。
-6. 写操作被拒绝时检查 `YUNXIAO_READ_ONLY_GUARD=1` 是否开启。
+1. 确认 Node.js：`node -v`，需要 `>= 18.0.0`。
+2. 确认客户端已加载插件，且工具列表里存在 `yunxiao` MCP。
+3. 确认 `YUNXIAO_ACCESS_TOKEN` 有目标模块权限。
+4. Region 站优先检查 `YUNXIAO_API_BASE_URL` 是否是组织实例域名。
+5. 工具缺失时检查 `DEVOPS_TOOLSETS` 是否只启用了部分模块。
+6. 写操作被拒绝时检查 `YUNXIAO_READ_ONLY_GUARD` 是否开启。
+7. SLS 分析工具不可用时，运行 `skills/analyze-aliyun-sls-logs/scripts/setup_observability_mcp.py` 并重启 Codex 会话。
 
 ## 许可
 
