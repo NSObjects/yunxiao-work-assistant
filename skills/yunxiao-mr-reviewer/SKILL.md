@@ -13,7 +13,8 @@ description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，�
 - 官方 README 的完整功能列表见 `https://raw.githubusercontent.com/aliyun/alibabacloud-devops-mcp-server/refs/heads/master/README.md`；MR 审核至少需要启用 `code-management`，按关联工作项核对需求时还需要 `project-management`。
 - 以当前会话真实暴露的 Yunxiao MCP 工具为准；旧文档可能使用 `list_change_request`、`get_compare` 等历史名称，当前优先使用 `list_change_requests`、`compare`。
 - 不臆造 `organizationId`、`repositoryId`、`localId`、分支名、patch set ID、文件路径或行号。缺关键参数时先查询，仍无法确认时再向用户要。
-- 审核发现必须基于 MR diff、目标/源分支文件内容、提交或已有评论证据；推断要标明依据，不把猜测写成事实。
+- 审核发现必须基于最新 patch set 的 MR diff、目标/源分支文件内容、提交或已有评论证据；推断要标明依据，不把猜测写成事实。
+- MR 变更范围必须锁定在最新 patch set 的 base/source commit 或等价 patch-set 边界上；不要用普通 branch compare、merge-base compare 或源分支历史提交清单当作最终审核范围。
 - 审核前必须形成紧凑 Review Package：实现内容、规格/验收场景、目标基线、源分支头部、测试证据、已知风险和缺失上下文；包内缺关键证据时结论用 `NEEDS_CONTEXT`。
 - MR 审核只读取已有测试证据，不运行本地测试命令、不触发云效流水线、不执行云效测试计划或测试用例；测试不足时只报告缺口和建议。
 - 审核输出以问题为主。没有明确 bug、回归、安全风险或缺失测试时，直接说明“未发现需要阻塞合并的问题”。
@@ -34,19 +35,21 @@ description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，�
    - 调用 `get_change_request` 获取 MR 标题、状态、作者、源分支、目标分支、关联工作项和描述。
    - 如果只有搜索条件，调用 `list_change_requests`，优先筛选 `state="opened"`。
 2. 收集审核材料：
-   - 调用 `list_change_request_patch_sets` 获取版本列表，识别最新 patch set，以及行内评论需要的 `from_patchset_biz_id` / `to_patchset_biz_id`。
+   - 调用 `list_change_request_patch_sets` 获取版本列表，识别最新 patch set、base commit、source commit，以及行内评论需要的 `from_patchset_biz_id` / `to_patchset_biz_id`。
    - 调用 `list_change_request_comments` 获取已发布和未解决评论，避免重复提出同一问题。
-   - 调用 `compare` 比较目标分支到源分支；分支比较时使用 `from=<目标分支>`、`to=<源分支>`、`sourceType="branch"`、`targetType="branch"`，默认使用 merge-base。
-   - 需要上下文时，用 `get_file_blobs` 分别读取源分支和目标分支文件内容；需要目录结构时用 `list_files`。
-   - 优先读取目标分支基线上的项目指南文件：仓库根目录或靠近改动文件的 `AGENT.md`，再读取源分支同路径版本。源分支修改了指南文件时，把指南变更本身作为 MR 变更审查，不要直接用新规则覆盖基线规则。
+   - 调用 `compare` 对最新 patch set 的 base commit 与 source commit 做直接比较；工具支持时使用 `from=<base commit>`、`to=<source commit>`、`sourceType="commit"`、`targetType="commit"`、`straight=true`。这份结果是唯一的 MR 变更文件清单和行号依据。
+   - 如果最新 patch set 没有返回可比较的 commit 或等价边界，先尝试从 patch set 详情、MR 版本信息或提交详情补齐；仍无法补齐时结论为 `NEEDS_CONTEXT`，不要退回到 branch compare 扩大审核范围。
+   - 只允许把 latest patch-set diff 中新增、修改或删除的文件作为审核发现的定位范围。读取未改文件只能用于理解调用方、被调用方、接口契约、项目约定或风险传播路径；不得把未改文件里的既有问题当成本次 MR 发现。
+   - 需要上下文时，用 `get_file_blobs` 按 base commit 和 source commit 分别读取文件内容；需要目录结构时用 `list_files`。读取分支名版本只可作为补充，不可替代 patch-set commit 版本。
+   - 优先读取 base commit 上的项目指南文件：仓库根目录或靠近改动文件的 `AGENT.md`，再读取 source commit 同路径版本。source commit 修改了指南文件时，把指南变更本身作为 MR 变更审查，不要直接用新规则覆盖基线规则。
    - 查看源分支 `specs/` 目录下与 MR 标题、分支名、工作项 ID、提交信息或改动模块相关的规格文件；没有提交或找不到对应规格文件时忽略，并在最终总结评论里标注“未发现对应 specs 规格文件”。
-   - 需要追溯动机或拆分变更时，用 `list_commits` 和 `get_commit` 查看源分支提交。
+   - 需要追溯动机或拆分变更时，用 `list_commits` 和 `get_commit` 查看源分支提交；这些材料只解释动机，不改变 latest patch-set diff 定义的审核范围。
    - MR 关联了工作项且用户要求核对需求时，用 `get_work_item`、`list_work_item_comments`、`list_workitem_attachments`、`get_workitem_file` 补需求、验收说明和附件证据。
 3. 建立 Review Package：
    - `实现内容`：基于 MR 描述、提交和 diff 概括，不照抄作者描述。
    - `规格/验收场景`：来自 `specs/`、关联工作项或 MR 描述；没有就写 `None provided`。
-   - `目标基线`：目标分支名和用于比较的基线版本或 patch set。
-   - `源分支头部`：源分支名、最新提交或最新 patch set。
+   - `目标基线`：目标分支名、latest patch set 的 base commit，以及使用的比较方式。
+   - `源分支头部`：源分支名、latest patch set 的 source commit，以及最新 patch set ID。
    - `测试证据`：只记录测试文件变更、MR 描述里的测试结果、已有流水线结果或人工验证说明；没有就写“未发现测试证据”，不要为了补证据而运行测试。
    - `已知风险/缺失上下文`：权限不足、文件过大未读、specs 规格缺失、评论写入失败等。
 4. 做代码审核：
@@ -54,11 +57,11 @@ description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，�
    - 再用对应 specs 规格文件判断分支是否实现了预期功能、是否遗漏验收条件、是否引入规格外行为；没有 specs 规格文件时只基于代码和 MR 描述审核，不臆造需求。
    - 先看高风险文件：鉴权、权限、支付、数据迁移、配置、部署、并发、缓存、错误处理、外部 API、持久化、测试改动。
    - 大 MR 先按文件和风险聚类；不要平均扫所有格式化或生成文件。
-   - 对每个候选问题，确认它能由当前 diff 触发，并说明触发条件、影响和最小修复方向。
+   - 对每个候选问题，确认它能由 latest patch-set diff 触发，并说明触发条件、影响和最小修复方向；如果问题只存在于未改上下文文件，最多作为背景说明，不写成 MR 审核发现。
    - 需要更细的检查清单时，读取 `references/review-guidelines.md`。
 5. 输出结果：
    - 先列 `审核发现`，按 `P0`、`P1`、`P2`、`P3` 排序。
-   - 每条发现包含：严重级别、文件行号、问题、证据、影响、建议。
+   - 每条发现包含：严重级别、文件行号、问题、证据、影响、建议；文件行号必须指向 latest patch-set diff 中的新增或修改行，无法可靠定位时降级为全局问题评论并说明相关 diff 文件。
    - 对明确且可行动的问题，按“评论写入流程”主动写入 MR 评论；没有明确问题时不写评论。
    - 无论是否发现问题，都按“最终总结评论”在 MR 上发布一条全局总结，方便人工 review。
    - 再给 `审核摘要`：MR 状态、源分支到目标分支、Review Package 摘要、已有未解决评论、主要风险面、评论写入结果和结论。
@@ -100,7 +103,7 @@ description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，�
 **`P1` 问题标题**
 
 - **触发条件**：说明什么输入、状态或调用路径会触发。
-- **问题原因**：说明当前 diff 中哪段逻辑导致问题。
+- **问题原因**：说明 latest patch-set diff 中哪段逻辑导致问题。
 - **影响范围**：说明会影响哪些用户、数据、权限或流程。
 - **修复建议**：给出最小修复方向。
 - **验证建议**：说明应补充或复核的关键场景；没有测试缺口时写“复用现有验证即可”。
@@ -215,7 +218,7 @@ sequenceDiagram
 ## 评论写入流程
 
 1. 写入前必须已经完成去重：查询已有未解决评论，避免重复发布同一问题。
-2. 只评论明确、可行动、能定位到当前 diff 或相关文件的问题；低价值风格建议默认只放在最终回复里，不写入 MR。
+2. 只评论明确、可行动、能定位到 latest patch-set diff 或相关文件的问题；低价值风格建议默认只放在最终回复里，不写入 MR。
 3. 调用 Yunxiao MCP 时必须按当前工具 schema 传参，不要把 REST API 文档里的 `repositoryIdentity`、`commentType`、`filePath`、`patchSetBizId` 等字段名直接传给 MCP。
    - `content` 长度保持在 1 到 65535 之间。总结评论仍按本 skill 的长度目标压缩，避免接近上限。
    - `parent_comment_biz_id` 只在回复已有评论时传；创建根评论时不传。
@@ -223,7 +226,7 @@ sequenceDiagram
    - 评论层级一般不要超过 3 层；自动回复已有评论时避免继续加深层级。
 4. 调用 `create_change_request_comment`：
    - 最终总结评论固定使用 `comment_type="GLOBAL_COMMENT"`，`patchset_biz_id` 使用最新合并源版本 ID，并显式设置 `resolved=false`。
-   - 能可靠定位到当前 diff 新增或修改行的问题评论，使用 `comment_type="INLINE_COMMENT"`，必须提供 `file_path`、`line_number`、`from_patchset_biz_id`、`to_patchset_biz_id` 和 `patchset_biz_id`，并显式设置 `resolved=false`。
+   - 能可靠定位到 latest patch-set diff 新增或修改行的问题评论，使用 `comment_type="INLINE_COMMENT"`，必须提供 `file_path`、`line_number`、`from_patchset_biz_id`、`to_patchset_biz_id` 和 `patchset_biz_id`，并显式设置 `resolved=false`。
    - 无法可靠映射新文件行号、跨多个文件、缺少具体行号或属于总体风险的问题评论，使用 `comment_type="GLOBAL_COMMENT"`，在内容里写明文件路径和代码位置，并显式设置 `resolved=false`。
    - 问题类 `GLOBAL_COMMENT` 不能使用最终总结标记 `<!-- yunxiao-mr-reviewer:final-summary -->`，最终总结 `GLOBAL_COMMENT` 不能承载未解决问题详情。
    - 评论正文必须套用“评论排版规范”的模板；行内评论优先用短列表，全局总结使用固定二级/三级标题、列表和 Mermaid `sequenceDiagram` 代码理解图。

@@ -10,7 +10,7 @@
 |---|---|---|
 | `yunxiao-devops-assistant` | 查询或管理云效组织、代码仓库、项目工作项、流水线、制品、应用交付、测试管理 | 不臆造对象 ID；生产、删除、发布、部署、权限、变量等高风险动作必须先确认 |
 | `yunxiao-work-assistant` | 生成个人周计划、写回计划字段、需求分支管理、生成周报 | 默认查 `assignedTo: "self"`；周计划默认覆盖当前迭代和延期旧迭代；写回只限预计工时、计划开始时间、计划完成时间 |
-| `yunxiao-mr-reviewer` | 审核云效 Codeup MR，读取 MR、patch set、diff、项目指南、规格和已有评论，并写入问题评论与最终总结 | 审核只基于已有证据，不运行本地测试、云效流水线或测试计划；问题评论和最终总结分开写 |
+| `yunxiao-mr-reviewer` | 审核云效 Codeup MR，读取 MR、latest patch-set diff、项目指南、规格和已有评论，并写入问题评论与最终总结 | 审核范围锁定 latest patch set 的 base/source commit；不运行本地测试、云效流水线或测试计划；问题评论和最终总结分开写 |
 | `analyze-aliyun-sls-logs` | 分析阿里云 SLS 告警、错误峰值、日志模式变化、设备/request/trace ID 排障 | 优先聚合再抽样；缺少 SLS MCP 配置时使用插件内脚本配置 Alibaba Cloud Observability MCP |
 
 ## 安装
@@ -166,7 +166,7 @@ export DEVOPS_TOOLSETS="code-management,project-management"
 使用 $yunxiao-mr-reviewer 审核这个云效 Codeup MR，读取 diff、项目 AGENT 指南和 specs，发现明确问题就写入评论，最后发布最终总结。
 ```
 
-MR 审核会形成 Review Package：实现内容、规格/验收场景、目标基线、源分支头部、测试证据、已知风险和缺失上下文。明确且可行动的问题会写成行内评论或全局问题评论；每次完整审核会单独发布最终总结评论。
+MR 审核会先锁定 latest patch set 的 base/source commit，并只把这份 diff 中的新增、修改或删除文件作为 MR 变更范围。Review Package 会记录实现内容、规格/验收场景、目标基线、源分支头部、测试证据、已知风险和缺失上下文。明确且可行动的问题会写成行内评论或全局问题评论；每次完整审核会单独发布最终总结评论。
 
 审核结论使用：
 
