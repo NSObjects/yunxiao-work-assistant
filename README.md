@@ -17,23 +17,29 @@
 
 前置条件：
 
-- Node.js `>= 18`
+- Node.js `>= 20`
 - 云效个人访问令牌
 - 已为令牌授予任务所需的云效 API 权限
 
-安装 Skills：
+交互安装（可选择要安装的 Skill、Agent 和安装范围）：
 
 ```bash
 npx skills add NSObjects/yunxiao-work-assistant
 ```
 
+如需直接全局安装：
+
+```bash
+npx skills add NSObjects/yunxiao-work-assistant --global
+```
+
 更新已安装 Skills：
 
 ```bash
-# 当前项目
+# 更新当前项目安装的 Skills
 npx skills update --project --yes
 
-# 全局安装
+# 更新全局安装的 Skills
 npx skills update --global --yes
 ```
 
@@ -143,7 +149,7 @@ python3 <analyze-aliyun-sls-logs-skill-dir>/scripts/setup_observability_mcp.py
 
 ## 排障
 
-1. 运行 `node -v`，确认版本不低于 18。
+1. 运行 `node -v`，确认版本不低于 20。
 2. 确认 Agent 已安装目标 Skill，并已加载名为 `yunxiao` 的 MCP Server。
 3. 检查 `YUNXIAO_ACCESS_TOKEN` 权限和 `YUNXIAO_API_BASE_URL`。
 4. 工具缺失时检查 `DEVOPS_TOOLSETS` 是否限制了模块。
