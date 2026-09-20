@@ -37,7 +37,7 @@ description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，�
 2. 收集审核材料：
    - 调用 `list_change_request_patch_sets` 获取版本列表，识别最新 patch set、base commit、source commit，以及行内评论需要的 `from_patchset_biz_id` / `to_patchset_biz_id`。
    - 调用 `list_change_request_comments` 获取已发布和未解决评论，避免重复提出同一问题。
-   - 调用 `compare` 对最新 patch set 的 base commit 与 source commit 做直接比较；工具支持时使用 `from=<base commit>`、`to=<source commit>`、`sourceType="commit"`、`targetType="commit"`、`straight=true`。这份结果是唯一的 MR 变更文件清单和行号依据。
+   - 调用 `compare` 对最新 patch set 的 base commit 与 source commit 做直接比较；commit 比较使用 `from=<base commit>`、`to=<source commit>`、`straight=true`，省略 `sourceType` 和 `targetType`。这份结果是唯一的 MR 变更文件清单和行号依据。
    - 如果最新 patch set 没有返回可比较的 commit 或等价边界，先尝试从 patch set 详情、MR 版本信息或提交详情补齐；仍无法补齐时结论为 `NEEDS_CONTEXT`，不要退回到 branch compare 扩大审核范围。
    - 只允许把 latest patch-set diff 中新增、修改或删除的文件作为审核发现的定位范围。读取未改文件只能用于理解调用方、被调用方、接口契约、项目约定或风险传播路径；不得把未改文件里的既有问题当成本次 MR 发现。
    - 需要上下文时，用 `get_file_blobs` 按 base commit 和 source commit 分别读取文件内容；需要目录结构时用 `list_files`。读取分支名版本只可作为补充，不可替代 patch-set commit 版本。
