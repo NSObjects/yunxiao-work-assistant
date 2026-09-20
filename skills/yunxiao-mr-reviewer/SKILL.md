@@ -15,6 +15,7 @@ description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，�
 - 不臆造 `organizationId`、`repositoryId`、`localId`、分支名、patch set ID、文件路径或行号。缺关键参数时先查询，仍无法确认时再向用户要。
 - 审核发现必须基于最新 patch set 的 MR diff、目标/源分支文件内容、提交或已有评论证据；推断要标明依据，不把猜测写成事实。
 - MR 变更范围必须锁定在最新 patch set 的 base/source commit 或等价 patch-set 边界上；不要用普通 branch compare、merge-base compare 或源分支历史提交清单当作最终审核范围。
+- 当前目标分支 HEAD 与 latest patch set 的 base commit 不同，只表示目标分支在该 patch set 创建后继续推进；这不影响基于 patch-set 快照审核和发布行内评论。不得以“目标分支基线漂移”为由跳过行内定位。
 - 审核前必须形成紧凑 Review Package：实现内容、规格/验收场景、目标基线、源分支头部、测试证据、已知风险和缺失上下文；包内缺关键证据时结论用 `NEEDS_CONTEXT`。
 - MR 审核只读取已有测试证据，不运行本地测试命令、不触发云效流水线、不执行云效测试计划或测试用例；测试不足时只报告缺口和建议。
 - 审核输出以问题为主。没有明确 bug、回归、安全风险或缺失测试时，直接说明“未发现需要阻塞合并的问题”。
@@ -35,9 +36,10 @@ description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，�
    - 调用 `get_change_request` 获取 MR 标题、状态、作者、源分支、目标分支、关联工作项和描述。
    - 如果只有搜索条件，调用 `list_change_requests`，优先筛选 `state="opened"`。
 2. 收集审核材料：
-   - 调用 `list_change_request_patch_sets` 获取版本列表，识别最新 patch set、base commit、source commit，以及行内评论需要的 `from_patchset_biz_id` / `to_patchset_biz_id`。
+   - 调用 `list_change_request_patch_sets` 获取版本列表。latest version 中 `relatedMergeItemType="MERGE_TARGET"` 的记录提供 base commit 和 `from_patchset_biz_id`；`relatedMergeItemType="MERGE_SOURCE"` 的记录提供 source commit、`to_patchset_biz_id` 和评论关联使用的 `patchset_biz_id`。
    - 调用 `list_change_request_comments` 获取已发布和未解决评论，避免重复提出同一问题。
    - 调用 `compare` 对最新 patch set 的 base commit 与 source commit 做直接比较；commit 比较使用 `from=<base commit>`、`to=<source commit>`、`straight=true`，省略 `sourceType` 和 `targetType`。这份结果是唯一的 MR 变更文件清单和行号依据。
+   - `get_branch` 返回的当前目标分支 HEAD 只用于提示合并或 rebase 风险，不参与行内评论定位，也不替换 latest patch set 的 base commit。
    - 如果最新 patch set 没有返回可比较的 commit 或等价边界，先尝试从 patch set 详情、MR 版本信息或提交详情补齐；仍无法补齐时结论为 `NEEDS_CONTEXT`，不要退回到 branch compare 扩大审核范围。
    - 只允许把 latest patch-set diff 中新增、修改或删除的文件作为审核发现的定位范围。读取未改文件只能用于理解调用方、被调用方、接口契约、项目约定或风险传播路径；不得把未改文件里的既有问题当成本次 MR 发现。
    - 需要上下文时，用 `get_file_blobs` 按 base commit 和 source commit 分别读取文件内容；需要目录结构时用 `list_files`。读取分支名版本只可作为补充，不可替代 patch-set commit 版本。
@@ -226,7 +228,8 @@ sequenceDiagram
    - 评论层级一般不要超过 3 层；自动回复已有评论时避免继续加深层级。
 4. 调用 `create_change_request_comment`：
    - 最终总结评论固定使用 `comment_type="GLOBAL_COMMENT"`，`patchset_biz_id` 使用最新合并源版本 ID，并显式设置 `resolved=false`。
-   - 能可靠定位到 latest patch-set diff 新增或修改行的问题评论，使用 `comment_type="INLINE_COMMENT"`，必须提供 `file_path`、`line_number`、`from_patchset_biz_id`、`to_patchset_biz_id` 和 `patchset_biz_id`，并显式设置 `resolved=false`。
+   - 能可靠定位到 latest patch-set diff 新增或修改行的问题评论，使用 `comment_type="INLINE_COMMENT"`：`from_patchset_biz_id` 使用 latest `MERGE_TARGET` 的 ID，`to_patchset_biz_id` 和 `patchset_biz_id` 使用 latest `MERGE_SOURCE` 的 ID，并提供 `file_path`、`line_number` 和 `resolved=false`。
+   - 行内评论调用失败时，重新查询一次 patch sets 并用最新一对 ID 重试；只有缺少 patch-set ID、目标行不在 diff 新增/修改行中，或重试仍返回明确定位错误时才降级为全局问题评论，并记录真实失败原因，不使用笼统的“基线漂移”。
    - 无法可靠映射新文件行号、跨多个文件、缺少具体行号或属于总体风险的问题评论，使用 `comment_type="GLOBAL_COMMENT"`，在内容里写明文件路径和代码位置，并显式设置 `resolved=false`。
    - 问题类 `GLOBAL_COMMENT` 不能使用最终总结标记 `<!-- yunxiao-mr-reviewer:final-summary -->`，最终总结 `GLOBAL_COMMENT` 不能承载未解决问题详情。
    - 评论正文必须套用“评论排版规范”的模板；行内评论优先用短列表，全局总结使用固定二级/三级标题、列表和 Mermaid `sequenceDiagram` 代码理解图。
