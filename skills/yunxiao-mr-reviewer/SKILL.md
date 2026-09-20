@@ -1,6 +1,6 @@
 ---
 name: yunxiao-mr-reviewer
-description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，拉取 MR 详情、patch set、diff、提交、文件内容、项目 AGENT 指南、specs 规格文件和已有评论，输出按严重程度排序的代码审核发现，并可主动在 MR 上发布行内问题评论和最终总结评论；用于用户要求审查云效 MR、Codeup 合并请求、变更 diff、待合并代码风险、规格实现一致性，或处理 MR 评论时。
+description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，拉取 MR 详情、patch set、diff、提交、文件内容、项目 AGENT 指南、specs 规格文件和已有评论，输出按严重程度排序的代码审核发现，并可主动在 MR 上发布行内问题评论和最终总结评论；用于用户要求审查云效 MR、Codeup 合并请求、变更 diff、待合并代码风险、规格实现一致性，或处理 MR 评论时。检测到本地已安装 open-code-review（`ocr` CLI）时优先用其执行主审，超时或部分完成时续跑，仍未完成再回退内置审核。
 ---
 
 # 云效 MR 审核助手
@@ -16,8 +16,9 @@ description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，�
 - 审核发现必须基于最新 patch set 的 MR diff、目标/源分支文件内容、提交或已有评论证据；推断要标明依据，不把猜测写成事实。
 - MR 变更范围必须锁定在最新 patch set 的 base/source commit 或等价 patch-set 边界上；不要用普通 branch compare、merge-base compare 或源分支历史提交清单当作最终审核范围。
 - 当前目标分支 HEAD 与 latest patch set 的 base commit 不同，只表示目标分支在该 patch set 创建后继续推进；这不影响基于 patch-set 快照审核和发布行内评论。不得以“目标分支基线漂移”为由跳过行内定位。
+- `ocr` 是主审引擎但不是唯一发现来源；允许基于同一份 latest patch-set diff 补充人工发现，必须明确标记为“人工补充发现”，并与 OCR 结果合并去重。
 - 审核前必须形成紧凑 Review Package：实现内容、规格/验收场景、目标基线、源分支头部、测试证据、已知风险和缺失上下文；包内缺关键证据时结论用 `NEEDS_CONTEXT`。
-- MR 审核只读取已有测试证据，不运行本地测试命令、不触发云效流水线、不执行云效测试计划或测试用例；测试不足时只报告缺口和建议。
+- MR 审核只读取已有测试证据，不运行本地测试命令、不触发云效流水线、不执行云效测试计划或测试用例；测试不足时只报告缺口和建议。`ocr review` 属于审查工具，不属于测试命令。
 - 审核输出以问题为主。没有明确 bug、回归、安全风险或缺失测试时，直接说明“未发现需要阻塞合并的问题”。
 - 行内/全局问题评论用于指出具体风险；最终总结评论用于沉淀整个分支的实现说明、结构化实现流程和人工 review 指引，二者不要混在一起。
 
@@ -35,18 +36,13 @@ description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，�
    - 调用 `get_repository` 或 `list_repositories` 确认仓库。
    - 调用 `get_change_request` 获取 MR 标题、状态、作者、源分支、目标分支、关联工作项和描述。
    - 如果只有搜索条件，调用 `list_change_requests`，优先筛选 `state="opened"`。
-2. 收集审核材料：
+2. 收集审核边界和评论状态：
    - 调用 `list_change_request_patch_sets` 获取版本列表。latest version 中 `relatedMergeItemType="MERGE_TARGET"` 的记录提供 base commit 和 `from_patchset_biz_id`；`relatedMergeItemType="MERGE_SOURCE"` 的记录提供 source commit、`to_patchset_biz_id` 和评论关联使用的 `patchset_biz_id`。
-   - 调用 `list_change_request_comments` 获取已发布和未解决评论，避免重复提出同一问题。
+   - 调用 `list_change_request_comments` 获取已有全局评论和最终总结，从最终总结的问题索引恢复已写入的行内评论，避免重复提出同一问题。
    - 调用 `compare` 对最新 patch set 的 base commit 与 source commit 做直接比较；commit 比较使用 `from=<base commit>`、`to=<source commit>`、`straight=true`，省略 `sourceType` 和 `targetType`。这份结果是唯一的 MR 变更文件清单和行号依据。
    - `get_branch` 返回的当前目标分支 HEAD 只用于提示合并或 rebase 风险，不参与行内评论定位，也不替换 latest patch set 的 base commit。
    - 如果最新 patch set 没有返回可比较的 commit 或等价边界，先尝试从 patch set 详情、MR 版本信息或提交详情补齐；仍无法补齐时结论为 `NEEDS_CONTEXT`，不要退回到 branch compare 扩大审核范围。
    - 只允许把 latest patch-set diff 中新增、修改或删除的文件作为审核发现的定位范围。读取未改文件只能用于理解调用方、被调用方、接口契约、项目约定或风险传播路径；不得把未改文件里的既有问题当成本次 MR 发现。
-   - 需要上下文时，用 `get_file_blobs` 按 base commit 和 source commit 分别读取文件内容；需要目录结构时用 `list_files`。读取分支名版本只可作为补充，不可替代 patch-set commit 版本。
-   - 优先读取 base commit 上的项目指南文件：仓库根目录或靠近改动文件的 `AGENT.md`，再读取 source commit 同路径版本。source commit 修改了指南文件时，把指南变更本身作为 MR 变更审查，不要直接用新规则覆盖基线规则。
-   - 查看源分支 `specs/` 目录下与 MR 标题、分支名、工作项 ID、提交信息或改动模块相关的规格文件；没有提交或找不到对应规格文件时忽略，并在最终总结评论里标注“未发现对应 specs 规格文件”。
-   - 需要追溯动机或拆分变更时，用 `list_commits` 和 `get_commit` 查看源分支提交；这些材料只解释动机，不改变 latest patch-set diff 定义的审核范围。
-   - MR 关联了工作项且用户要求核对需求时，用 `get_work_item`、`list_work_item_comments`、`list_workitem_attachments`、`get_workitem_file` 补需求、验收说明和附件证据。
 3. 建立 Review Package：
    - `实现内容`：基于 MR 描述、提交和 diff 概括，不照抄作者描述。
    - `规格/验收场景`：来自 `specs/`、关联工作项或 MR 描述；没有就写 `None provided`。
@@ -55,19 +51,49 @@ description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，�
    - `测试证据`：只记录测试文件变更、MR 描述里的测试结果、已有流水线结果或人工验证说明；没有就写“未发现测试证据”，不要为了补证据而运行测试。
    - `已知风险/缺失上下文`：权限不足、文件过大未读、specs 规格缺失、评论写入失败等。
 4. 做代码审核：
-   - 先用目标分支基线的 `AGENT.md` 理解项目架构、目录职责、命名约定、测试策略和禁用做法；如果源分支修改了该文件，单独说明规则变化及其影响。审核风格和架构一致性时要引用基线约定。
-   - 再用对应 specs 规格文件判断分支是否实现了预期功能、是否遗漏验收条件、是否引入规格外行为；没有 specs 规格文件时只基于代码和 MR 描述审核，不臆造需求。
-   - 先看高风险文件：鉴权、权限、支付、数据迁移、配置、部署、并发、缓存、错误处理、外部 API、持久化、测试改动。
-   - 大 MR 先按文件和风险聚类；不要平均扫所有格式化或生成文件。
-   - 对每个候选问题，确认它能由 latest patch-set diff 触发，并说明触发条件、影响和最小修复方向；如果问题只存在于未改上下文文件，最多作为背景说明，不写成 MR 审核发现。
-   - 需要更细的检查清单时，读取 `references/review-guidelines.md`。
+   - `command -v ocr` 成功时执行“OCR 审查引擎”；未安装、本地仓库不可用、无法取得 session、或续跑后仍未完成时，对未完成文件执行“内置回退审查”。
+   - OCR 完成后允许人工复核 latest patch-set diff，补充 OCR 漏报的明确问题；每条补充必须标记“人工补充发现”，且只能定位到本次 diff 的新增或修改行。
+   - 合并 OCR、续跑、内置回退和人工补充结果，按“来源 + 文件路径 + 新侧行号 + 归一化标题/根因”生成稳定问题键；同根因跨来源重复时合并为一条，优先保留定位最准、证据最完整的版本。
 5. 输出结果：
    - 先列 `审核发现`，按 `P0`、`P1`、`P2`、`P3` 排序。
-   - 每条发现包含：严重级别、文件行号、问题、证据、影响、建议；文件行号必须指向 latest patch-set diff 中的新增或修改行，无法可靠定位时降级为全局问题评论并说明相关 diff 文件。
+   - 每条发现包含：来源、严重级别、文件行号、问题、证据、影响、建议；文件行号必须指向 latest patch-set diff 中的新增或修改行，无法可靠定位时降级为全局问题评论并说明相关 diff 文件。
    - 对明确且可行动的问题，按“评论写入流程”主动写入 MR 评论；没有明确问题时不写评论。
    - 无论是否发现问题，都按“最终总结评论”在 MR 上发布一条全局总结，方便人工 review。
    - 再给 `审核摘要`：MR 状态、源分支到目标分支、Review Package 摘要、已有未解决评论、主要风险面、评论写入结果和结论。
    - 最后给 `测试与验证缺口`，只列和风险直接相关的缺口。
+
+## OCR 审查引擎（open-code-review）
+
+1. 准备本地仓库：当前目录是对应 Codeup clone 时直接复用，否则完整 clone 到临时目录并 fetch latest patch set 的 source commit；认证、网络或权限失败时直接执行内置回退，不主动安装或配置 `ocr`。
+2. 业务背景优先来自关联工作项的标题、描述和验收标准；找不到工作项时使用 MR 标题和描述。背景只陈述事实，不加入“重点检查某处”之类的审查指令。
+3. 使用 latest patch set 的 base/source commit 固定范围：
+
+   ```bash
+   ocr review --audience agent \
+     --background "<业务背景>" \
+     --from <latest patch set base commit> \
+     --to <latest patch set source commit> \
+     --repo <本地仓库路径> \
+     --concurrency 4 \
+     --output /tmp/ocr_out.txt
+   ```
+
+   - 必须完整读取 `--output` 文件，不用 `head`、`tail` 截断。
+   - OCR 的审查结果还要与第 2 步的 Yunxiao `compare` 结果交叉校验；不在 latest patch-set 变更文件或新增/修改行中的发现不得写入 MR。
+4. 超时、进程中断、输出含 `Review partially complete`、或存在 failed/skipped 文件时，不把首次结果当成完整审核：
+   - 从输出的 `Session:` 或 `retry with: --resume <id>` 取得 session ID，记录已完成文件和未完成文件。
+   - 优先使用同一 session、相同 `--from`/`--to` 续跑一次：`ocr review --from <base> --to <source> --resume <session-id> --repo <path> --audience agent --output /tmp/ocr_resume.txt`。
+   - resume 输出按“截至当前 session 的完整结果”处理；不要把首轮和 resume 的同一发现重复相加。根据两轮覆盖记录确认哪些文件已完成、哪些仍未完成。
+   - 无 session ID、resume 命令失败、或 resume 后仍有未完成文件时，仅对未完成文件执行内置回退审查；已完成文件复用 OCR 结果，不重复分析和写评论。
+5. 结果映射：`critical`→`P0`、`high`→`P1`、`medium`→`P2`、`low`→`P3`。纯格式、重命名、提常量等低价值建议不写入 MR；保留发现改写为本 skill 的评论模板，不原样搬运 OCR 文本。
+6. OCR 结果不是人工复核的上限。人工补充必须说明触发条件和行为影响，来源字段固定写“人工补充发现”；如果与 OCR 发现同根因，合并而不是再发一条。
+
+## 内置回退审查
+
+- 回退只覆盖 OCR 未完成或未确认完成的文件；`ocr` 完全不可用时才覆盖全部 latest patch-set 变更文件。
+- 用 `get_file_blobs` 按 base/source commit 读取上下文，按需读取基线 `AGENT.md`、相关 `specs/`、提交和工作项；这些材料用于理解约定和需求，不能扩大 MR 变更范围。
+- 先看鉴权、权限、支付、数据迁移、配置、部署、并发、缓存、错误处理、外部 API、持久化和测试改动。每个问题都要能由 latest patch-set diff 触发；未改文件里的既有问题只能作为背景。
+- 回退发现来源写“内置回退发现”，再与 OCR 和人工补充结果一起按稳定问题键去重。
 
 ## 发现级别
 
@@ -104,6 +130,7 @@ description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，�
 ```markdown
 **`P1` 问题标题**
 
+- **发现来源**：`open-code-review (ocr)` / `人工补充发现` / `内置回退发现`。
 - **触发条件**：说明什么输入、状态或调用路径会触发。
 - **问题原因**：说明 latest patch-set diff 中哪段逻辑导致问题。
 - **影响范围**：说明会影响哪些用户、数据、权限或流程。
@@ -118,6 +145,7 @@ description: 基于 Yunxiao MCP 审核阿里云云效 Codeup 合并请求/MR，�
 ```markdown
 ### `P1` 问题标题
 
+- **发现来源**：`open-code-review (ocr)` / `人工补充发现` / `内置回退发现`。
 - **位置**：`path/to/file.ts:42`、`path/to/other.ts`；跨模块问题写主要相关文件。
 - **触发条件**：说明什么输入、状态或调用路径会触发。
 - **问题原因**：说明涉及的代码路径、状态变化或模块协作问题。
@@ -206,9 +234,12 @@ sequenceDiagram
 
 ### 10. 审查详情
 
+- **审查引擎**：列出 `open-code-review (ocr)`、内置回退和人工补充是否参与，以及回退原因。
+- **文件覆盖**：分别列出 OCR 已完成、resume 后完成、内置回退完成和仍未完成的文件；全部完成时明确写“latest patch-set 变更文件已全部覆盖”。
 - **变更文件**：列出文件总数和主要路径；文件很多时按目录或模块归类。
 - **已审查材料**：列出 MR 描述、diff、提交、`AGENT.md`、`specs/`、工作项、已有评论等实际读取的材料。
 - **未审查/受限**：列出权限不足、文件过大、未取得 specs 规格文件、无法读取旧版本等限制；没有则写“未发现受限材料”。
+- **问题索引**：逐条记录稳定问题键、级别、来源、`文件:新侧行号` 和标题；没有问题时写“无”。稳定问题键格式为 `来源|文件路径|新侧行号|归一化标题或根因`。
 
 ### 11. AI 审核结论
 
@@ -219,7 +250,7 @@ sequenceDiagram
 
 ## 评论写入流程
 
-1. 写入前必须已经完成去重：查询已有未解决评论，避免重复发布同一问题。
+1. 写入前必须已经完成去重：查询已有未解决全局评论，并解析旧最终总结中的问题索引。当前结果先跨 OCR、resume、内置回退和人工补充合并同根因，再用稳定问题键匹配旧索引；已存在的问题不重复写入。
 2. 只评论明确、可行动、能定位到 latest patch-set diff 或相关文件的问题；低价值风格建议默认只放在最终回复里，不写入 MR。
 3. 调用 Yunxiao MCP 时必须按当前工具 schema 传参，不要把 REST API 文档里的 `repositoryIdentity`、`commentType`、`filePath`、`patchSetBizId` 等字段名直接传给 MCP。
    - `content` 长度保持在 1 到 65535 之间。总结评论仍按本 skill 的长度目标压缩，避免接近上限。
@@ -230,11 +261,12 @@ sequenceDiagram
    - 最终总结评论固定使用 `comment_type="GLOBAL_COMMENT"`，`patchset_biz_id` 使用最新合并源版本 ID，并显式设置 `resolved=false`。
    - 能可靠定位到 latest patch-set diff 新增或修改行的问题评论，使用 `comment_type="INLINE_COMMENT"`：`from_patchset_biz_id` 使用 latest `MERGE_TARGET` 的 ID，`to_patchset_biz_id` 和 `patchset_biz_id` 使用 latest `MERGE_SOURCE` 的 ID，并提供 `file_path`、`line_number` 和 `resolved=false`。
    - 行内评论调用失败时，重新查询一次 patch sets 并用最新一对 ID 重试；只有缺少 patch-set ID、目标行不在 diff 新增/修改行中，或重试仍返回明确定位错误时才降级为全局问题评论，并记录真实失败原因，不使用笼统的“基线漂移”。
+   - 当前目标分支 HEAD、`git merge-base` 或本地 clone 状态不决定能否行内定位；只要 latest patch set ID 有效且目标新侧行属于 Yunxiao `compare` 的新增/修改行，就继续写 `INLINE_COMMENT`。
    - 无法可靠映射新文件行号、跨多个文件、缺少具体行号或属于总体风险的问题评论，使用 `comment_type="GLOBAL_COMMENT"`，在内容里写明文件路径和代码位置，并显式设置 `resolved=false`。
    - 问题类 `GLOBAL_COMMENT` 不能使用最终总结标记 `<!-- yunxiao-mr-reviewer:final-summary -->`，最终总结 `GLOBAL_COMMENT` 不能承载未解决问题详情。
    - 评论正文必须套用“评论排版规范”的模板；行内评论优先用短列表，全局总结使用固定二级/三级标题、列表和 Mermaid `sequenceDiagram` 代码理解图。
    - 默认发布正式评论；只有用户明确要求草稿时才设置 `draft=true`。
-5. 写入后调用 `list_change_request_comments` 验证评论存在，并输出成功项、失败项和未写项。
+5. 写入后验证：`GLOBAL_COMMENT` 调用 `list_change_request_comments` 确认存在；该接口查不到行内评论，`INLINE_COMMENT` 以 `create_change_request_comment` 的成功回显为准，核对 `comment_biz_id`、`filePath`、`line_number` 和 `state=OPENED`。输出成功项、失败项和未写项。
 
 ## 最终总结评论
 
@@ -242,6 +274,7 @@ sequenceDiagram
 
 1. 使用 `comment_type="GLOBAL_COMMENT"` 调用 `create_change_request_comment`，`patchset_biz_id` 使用最新合并源版本 ID，并显式设置 `resolved=false`，让最终总结保留为未解决评论，方便人工 review 跟进。
 2. 评论内容必须包含稳定标记 `<!-- yunxiao-mr-reviewer:final-summary -->`。只有已有评论同时包含该标记和标题 `## AI Review 最终总结` 时，才允许用 `update_change_request_comment` 更新同一条；更新时也必须显式传 `resolved=false`，避免沿用已有评论的已解决状态；否则新建，避免误改人工评论。
+   - 重复审核同一 MR 时更新这条总结，不新建第二条；同步更新文件覆盖和问题索引。问题索引是行内评论幂等检查的持久记录，必须包含本轮新写入和此前仍有效的问题。
 3. 评论标题固定使用 `## AI Review 最终总结`，内容包含：
    - `变更概览`：一句话说明分支解决什么问题，列出主要模块和关键文件。
    - `项目约定依据`：列出读取到的 `AGENT.md` 路径和影响本次审核的约定；没有则写“未发现项目 AGENT 指南”。
