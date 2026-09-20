@@ -17,6 +17,26 @@
 
 如果希望让 Codex 自己执行安装和验证，直接让它读取本仓库的 `INSTALL.md`。
 
+### Skills CLI
+
+本仓库的 `skills/*/SKILL.md` 已兼容 [`vercel-labs/skills`](https://github.com/vercel-labs/skills)，无需额外清单或 npm 包。仅安装技能时可以直接使用公开 GitHub 仓库：
+
+```bash
+# 交互式选择技能和目标 Agent
+npx skills add NSObjects/yunxiao-work-assistant
+
+# 将全部技能安装到 Codex
+npx skills add NSObjects/yunxiao-work-assistant --agent codex --skill '*' --yes
+
+# 更新项目级安装
+npx skills update --project --yes
+
+# 更新全局安装
+npx skills update --global --yes
+```
+
+`skills add` 只安装 `skills/` 下的技能，不会注册 `.mcp.json`、Hooks 或插件元数据。需要开箱即用的云效和 SLS MCP 服务时，仍应安装完整插件；只安装技能时，需要自行配置对应 MCP 服务。
+
 ### Codex
 
 Codex 当前通过 marketplace snapshot 安装插件。把本插件目录放进一个本地 marketplace 后再安装：

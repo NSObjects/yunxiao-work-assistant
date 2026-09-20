@@ -5,8 +5,8 @@
   "author": {
     "name": "Yunxiao Work Assistant Maintainers"
   },
-  "homepage": "https://github.com/NSObjects/yunxiao-work-assistant-plugin",
-  "repository": "https://github.com/NSObjects/yunxiao-work-assistant-plugin",
+  "homepage": "https://github.com/NSObjects/yunxiao-work-assistant",
+  "repository": "https://github.com/NSObjects/yunxiao-work-assistant",
   "license": "MIT",
   "keywords": [
     "yunxiao",
@@ -34,7 +34,7 @@
       "Read",
       "Write"
     ],
-    "websiteURL": "https://github.com/NSObjects/yunxiao-work-assistant-plugin",
+    "websiteURL": "https://github.com/NSObjects/yunxiao-work-assistant",
     "defaultPrompt": [
       "根据云效当前迭代和延期事项规划这周工作",
       "审核云效 Codeup MR 的 diff、项目指南和 spec 规格，把明确问题和最终总结写入 MR 评论",
